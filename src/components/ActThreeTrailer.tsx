@@ -1,3 +1,6 @@
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { createCaravelleRig, type CaravelleRig } from '../lib/caravelleModel';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import { AnimatePresence, motion } from 'motion/react';
@@ -184,69 +187,130 @@ function sampleContinuousRoute(
   return { coord, lookAheadCoord, traveledCoords };
 }
 
-function createGoogleMapsCaravellePuck(): HTMLDivElement {
+interface Caravelle3DPuck {
+  element: HTMLDivElement;
+  update: (distanceMeters: number, steerDeg: number) => void;
+  dispose: () => void;
+}
+
+/** True 3D WebGL miniature of the sculpted Caravelle T5 GLB, rendered on a transparent canvas anchored to the marker. */
+function createCaravelle3DPuck(): Caravelle3DPuck {
+  const W = 120;
+  const H = 176;
   const wrapper = document.createElement('div');
   wrapper.setAttribute('data-testid', 'mini-caravelle-marker');
-  wrapper.style.width = '56px';
-  wrapper.style.height = '96px';
-  wrapper.style.display = 'flex';
-  wrapper.style.alignItems = 'center';
-  wrapper.style.justifyContent = 'center';
+  wrapper.style.width = `${W}px`;
+  wrapper.style.height = `${H}px`;
   wrapper.style.pointerEvents = 'none';
-  wrapper.innerHTML = `
-    <svg viewBox="0 0 84 144" width="52" height="90" style="filter: drop-shadow(0 8px 12px rgba(9, 11, 16, 0.45));">
-      <defs>
-        <radialGradient id="navHaloGrad" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.34" />
-          <stop offset="65%" stop-color="#4285F4" stop-opacity="0.18" />
-          <stop offset="100%" stop-color="#4285F4" stop-opacity="0" />
-        </radialGradient>
-        <linearGradient id="t5RoofGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stop-color="#DCE3EC" />
-          <stop offset="22%" stop-color="#FFFFFF" />
-          <stop offset="78%" stop-color="#F8FAFC" />
-          <stop offset="100%" stop-color="#CBD5E1" />
-        </linearGradient>
-        <linearGradient id="t5AzureGlass" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stop-color="#38BDF8" />
-          <stop offset="35%" stop-color="#1E3A5F" />
-          <stop offset="100%" stop-color="#0F172A" />
-        </linearGradient>
-      </defs>
 
-      <!-- Soft Cyan / Blue Navigation Halo -->
-      <ellipse cx="42" cy="72" rx="40" ry="66" fill="url(#navHaloGrad)" />
-      <ellipse cx="42" cy="72" rx="28" ry="56" fill="none" stroke="#38BDF8" stroke-opacity="0.45" stroke-width="1.5" />
+  let renderer: THREE.WebGLRenderer | null = null;
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  } catch {
+    renderer = null;
+  }
+  if (!renderer) {
+    return { element: wrapper, update: () => {}, dispose: () => {} };
+  }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  renderer.setSize(W, H);
+  renderer.setClearColor(0x000000, 0);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
+  renderer.domElement.setAttribute('data-testid', 'mini-caravelle-3d-canvas');
+  renderer.domElement.style.display = 'block';
+  wrapper.appendChild(renderer.domElement);
 
-      <!-- Sculpted Side Mirrors -->
-      <path d="M 11 40 Q 11 35 16 35 L 21 37 L 21 47 L 14 47 Q 11 46 11 40 Z" fill="#F8FAFC" stroke="#475569" stroke-width="1.2" />
-      <path d="M 73 40 Q 73 35 68 35 L 63 37 L 63 47 L 70 47 Q 73 46 73 40 Z" fill="#F8FAFC" stroke="#475569" stroke-width="1.2" />
+  const scene = new THREE.Scene();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  const camera = new THREE.PerspectiveCamera(30, W / H, 0.1, 60);
+  camera.position.set(0, 9.4, 7.4);
+  camera.lookAt(0, 0.5, -0.1);
 
-      <!-- White VW Caravelle T5 LWB Outer Unibody -->
-      <rect x="20" y="14" width="44" height="114" rx="12" fill="url(#t5RoofGrad)" stroke="#64748B" stroke-width="1.8" />
+  const key = new THREE.DirectionalLight(0xffffff, 2.0);
+  key.position.set(-3, 8, 4);
+  scene.add(key);
 
-      <!-- Sculpted Front Hood & Clear Headlights -->
-      <path d="M 24 22 Q 42 15 60 22 L 59 33 Q 42 29 25 33 Z" fill="#E2E8F0" />
-      <rect x="23" y="16" width="9" height="4" rx="2" fill="#FEF9C3" stroke="#94A3B8" stroke-width="0.6" />
-      <rect x="52" y="16" width="9" height="4" rx="2" fill="#FEF9C3" stroke="#94A3B8" stroke-width="0.6" />
+  // cyan navigation underglow + soft drop shadow
+  const mk = (stops: Array<[number, string]>) => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d')!;
+    const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    stops.forEach(([o, col]) => gr.addColorStop(o, col));
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(c);
+  };
+  const glow = new THREE.Mesh(
+    new THREE.PlaneGeometry(4.2, 7.6),
+    new THREE.MeshBasicMaterial({
+      map: mk([[0, 'rgba(56,189,248,0.55)'], [0.6, 'rgba(66,133,244,0.22)'], [1, 'rgba(66,133,244,0)']]),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+  );
+  glow.rotation.x = -Math.PI / 2;
+  glow.position.y = 0.01;
+  scene.add(glow);
+  const shadow = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.7, 6.0),
+    new THREE.MeshBasicMaterial({
+      map: mk([[0, 'rgba(0,0,0,0.55)'], [0.7, 'rgba(0,0,0,0.25)'], [1, 'rgba(0,0,0,0)']]),
+      transparent: true,
+      depthWrite: false,
+    })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.02;
+  scene.add(shadow);
 
-      <!-- Raked Azure-Tinted Front Windshield -->
-      <path d="M 24 33 Q 42 28 60 33 L 57 50 Q 42 47 27 50 Z" fill="url(#t5AzureGlass)" stroke="#0F172A" stroke-width="1" />
+  let rig: CaravelleRig | null = null;
+  let dist = 0;
+  let steer = 0;
+  let alive = true;
+  let lastDraw = 0;
+  const draw = () => {
+    if (!alive || !renderer) return;
+    if (rig) {
+      for (const w of rig.wheels) {
+        w.spin.rotation.z = -dist / 0.34;
+        if (w.front) w.steer.rotation.y = steer;
+      }
+    }
+    renderer.render(scene, camera);
+  };
 
-      <!-- Roof Panel Center Channel & Subtle Specular Lines -->
-      <rect x="27" y="53" width="30" height="62" rx="4" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1" />
-      <line x1="34" y1="56" x2="34" y2="112" stroke="#E2E8F0" stroke-width="1" />
-      <line x1="50" y1="56" x2="50" y2="112" stroke="#E2E8F0" stroke-width="1" />
+  createCaravelleRig()
+    .then((r) => {
+      if (!alive) return;
+      rig = r;
+      r.root.rotation.y = Math.PI / 2; // nose points up-screen (map bearing = vehicle heading)
+      r.root.scale.setScalar(0.92);
+      scene.add(r.root);
+      wrapper.setAttribute('data-glb', 'loaded');
+      draw();
+    })
+    .catch(() => wrapper.setAttribute('data-glb', 'error'));
 
-      <!-- Rear Azure-Tinted Window -->
-      <rect x="26" y="117" width="32" height="7" rx="3" fill="url(#t5AzureGlass)" stroke="#0F172A" stroke-width="0.8" />
-
-      <!-- Crisp Red Rear Taillights -->
-      <rect x="22" y="125" width="9" height="3.2" rx="1.4" fill="#EF4444" />
-      <rect x="53" y="125" width="9" height="3.2" rx="1.4" fill="#EF4444" />
-    </svg>
-  `;
-  return wrapper;
+  return {
+    element: wrapper,
+    update: (distanceMeters, steerDeg) => {
+      dist = distanceMeters;
+      steer = (steerDeg * Math.PI) / 180;
+      const now = performance.now();
+      if (now - lastDraw < 45) return; // throttle mini-van WebGL redraws (~22 fps) to keep the map fluid
+      lastDraw = now;
+      draw();
+    },
+    dispose: () => {
+      alive = false;
+      pmrem.dispose();
+      renderer?.dispose();
+    },
+  };
 }
 
 function formatEtaRemaining(remainingKm: number): string {
@@ -273,6 +337,7 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
+  const puckRef = useRef<Caravelle3DPuck | null>(null);
   const mapReadyRef = useRef(false);
 
   const routeMetrics = useMemo(
@@ -498,13 +563,14 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
         });
 
         // Google Maps Navigation Puck
+        const puck = createCaravelle3DPuck();
+        puckRef.current = puck;
         const marker = new maplibregl.Marker({
-          element: createGoogleMapsCaravellePuck(),
-          rotationAlignment: 'map',
-          pitchAlignment: 'map',
+          element: puck.element,
+          rotationAlignment: 'viewport',
+          pitchAlignment: 'viewport',
         })
           .setLngLat(CONTINUOUS_ROUTE.coordinates[0])
-          .setRotation(initialHeading)
           .addTo(map);
         markerRef.current = marker;
       });
@@ -516,6 +582,8 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
       mapReadyRef.current = false;
       markerRef.current?.remove();
       markerRef.current = null;
+      puckRef.current?.dispose();
+      puckRef.current = null;
       if (map) {
         map.remove();
         mapRef.current = null;
@@ -629,7 +697,9 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
           bearing: nextBearing,
         });
 
-        markerRef.current?.setLngLat(sampled.coord).setRotation(nextBearing);
+        markerRef.current?.setLngLat(sampled.coord);
+        const steerDelta = ((nextBearing - prevBearing + 540) % 360) - 180;
+        puckRef.current?.update(distanceKm * 1000, Math.max(-28, Math.min(28, steerDelta * 14)));
 
         const traveledSource = map.getSource('traveled-route') as maplibregl.GeoJSONSource | undefined;
         if (traveledSource) {

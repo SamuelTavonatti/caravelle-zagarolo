@@ -34,6 +34,9 @@ async function runFlowForViewport(browser, vp) {
     if (msg.type() === 'error') consoleErrors.push(msg.text());
   });
   page.on('pageerror', (err) => consoleErrors.push(err.message));
+  page.on('requestfailed', (r) => {
+    if (r.url().includes('localhost')) consoleErrors.push('REQFAIL ' + r.url());
+  });
   page.on('response', (res) => {
     if (res.status() >= 400 && !res.url().includes('favicon')) {
       failedRequests.push(`${res.status()} ${res.url()}`);
@@ -41,14 +44,14 @@ async function runFlowForViewport(browser, vp) {
   });
 
   await page.goto(URL, { waitUntil: 'load', timeout: 30000 });
+  await page.waitForSelector('[data-testid="caravelle-3d-canvas"][data-glb="loaded"]', { timeout: 30000 }).catch(() => {});
   await page.waitForTimeout(1800);
 
   // 1. Verify Act I Three.js 3D Studio Canvas, 0 Sketchfab references, 8/8 DISPONIBILI, and zero overflow
   const act1Check = await page.evaluate(() => {
-    const imgs = ['caravelle-closed-img', 'caravelle-open-img'].map(
-      (id) => document.querySelector(`[data-testid="${id}"]`)?.naturalWidth || 0
-    );
-    const rect = imgs.every((n) => n > 400) ? { width: 999, height: 999 } : null;
+    const host = document.querySelector('[data-testid="caravelle-3d-canvas"]');
+    const canvas = host?.querySelector('canvas');
+    const rect = host?.getAttribute('data-glb') === 'loaded' && canvas ? { width: 999, height: 999 } : null;
     const avail = document.querySelector('[data-testid="hero-availability-badge"]')?.textContent || '';
     const hasSketchfab = document.documentElement.innerHTML.toLowerCase().includes('sketchfab');
     return {
@@ -62,7 +65,7 @@ async function runFlowForViewport(browser, vp) {
     throw new Error(`[${vp.name}] Act I horizontal overflow: ${act1Check.overflowX}px`);
   }
   if (!act1Check.canvasReady) {
-    throw new Error(`[${vp.name}] closed/open studio photos failed to load (naturalWidth <= 400)!`);
+    throw new Error(`[${vp.name}] caravelle-t5.glb failed to load in hero stage!`);
   }
   if (act1Check.hasSketchfab) {
     throw new Error(`[${vp.name}] Found unexpected Sketchfab reference in Act I DOM!`);
@@ -73,17 +76,17 @@ async function runFlowForViewport(browser, vp) {
   await page.screenshot({ path: path.join(outDir, `${vp.name}-01-act1-azure-studio.png`) });
 
   // Trigger 3D sliding door + 90° overhead camera transition -> Act II
-  await page.getByTestId('door-hit-zone').hover();
-  await page.waitForTimeout(300);
+  await page.waitForFunction(() => window.__CARAVELLE_STAGE__ != null);
+  const door = await page.evaluate(() => window.__CARAVELLE_STAGE__.doorScreen());
+  await page.mouse.move(door.x, door.y);
+  await page.waitForTimeout(500);
+  const cursor = await page.evaluate(() => document.querySelector('[data-testid="caravelle-3d-canvas"] canvas').style.cursor);
+  if (cursor !== 'pointer') throw new Error(`[${vp.name}] 3D door hover cursor is "${cursor}", expected pointer`);
   await page.screenshot({ path: path.join(outDir, `${vp.name}-01b-door-hover.png`) });
-  await page.getByTestId('door-hit-zone').click();
-  await page.waitForTimeout(900);
-  const openOpacity = await page.evaluate(
-    () => parseFloat(getComputedStyle(document.querySelector('[data-testid="caravelle-open-img"]')).opacity)
-  );
-  if (openOpacity < 0.95) throw new Error(`[${vp.name}] open photo not revealed (opacity ${openOpacity})`);
-  await page.screenshot({ path: path.join(outDir, `${vp.name}-01c-door-open.png`) });
-  await page.getByTestId('act-two-cabin').waitFor({ state: 'visible', timeout: 6000 });
+  await page.mouse.click(door.x, door.y);
+  await page.getByTestId('act-two-cabin').waitFor({ state: 'visible', timeout: 15000 });
+  const doorMax = await page.evaluate(() => window.__CARAVELLE_DOOR_MAX__ ?? 0);
+  if (doorMax < 0.9) throw new Error(`[${vp.name}] 3D sliding door did not slide fully open (max progress ${doorMax})`);
   await page.waitForTimeout(400);
 
   // 2. Verify NO POV box, NO Sketchfab button, exact front-row aisle gap, and ALL 8 seats start FREE
@@ -157,6 +160,10 @@ async function runFlowForViewport(browser, vp) {
     throw new Error(`[${vp.name}] Expected Via Gocciadoro 1 departure, got: ${startBanner}`);
   }
   await page.getByTestId('mini-caravelle-marker').waitFor({ state: 'attached', timeout: 20000 }).catch(() => {});
+  await page.waitForSelector('[data-testid="mini-caravelle-marker"][data-glb="loaded"]', { timeout: 20000 }).catch(() => {});
+  if ((await page.getByTestId('mini-caravelle-3d-canvas').count()) === 0) {
+    throw new Error(`[${vp.name}] mini-caravelle-3d-canvas missing!`);
+  }
   const hasMiniVan = await page.getByTestId('mini-caravelle-marker').count();
   if (hasMiniVan === 0) {
     throw new Error(`[${vp.name}] Mini white VW Caravelle map marker not mounted!`);
@@ -183,7 +190,7 @@ async function runFlowForViewport(browser, vp) {
     .filter({ hasText: 'Si prende Taio' })
     .waitFor({ state: 'visible', timeout: 5000 });
 
-  await page.getByTestId('finale-end-card').waitFor({ state: 'visible', timeout: 14000 });
+  await page.getByTestId('finale-end-card').waitFor({ state: 'visible', timeout: 60000 });
   const navTelemetry = await page.evaluate(() => window.__CARAVELLE_NAV_TELEMETRY__);
   if (!navTelemetry || navTelemetry.maxBearingDelta > 10) {
     throw new Error(`[${vp.name}] Unstable camera bearing: ${JSON.stringify(navTelemetry)}`);

@@ -68,10 +68,10 @@ export function ActOneExterior({
 
       {/* Top Architectural Header Bar */}
       <header className="pointer-events-none absolute inset-x-0 top-0 z-20 border-b border-white/12 bg-[#09090B]/75 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-8">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-8">
           <div className="pointer-events-auto flex items-center gap-2.5 whitespace-nowrap">
             <span className="h-2 w-2 bg-[#10B981]" aria-hidden="true" />
-            <span className="font-mono-telemetry text-xs font-semibold tracking-[0.08em] uppercase text-[#F8FAFC]">
+            <span className="font-mono-telemetry text-[10px] font-semibold tracking-[0.04em] uppercase text-[#F8FAFC] sm:text-xs sm:tracking-[0.08em]">
               VW CARAVELLE T5
             </span>
             <span className="hidden font-mono-telemetry text-xs text-[#A1A1AA] sm:inline">
@@ -87,7 +87,7 @@ export function ActOneExterior({
               type="button"
               onClick={onEnterCabin}
               data-testid="quick-jump-seats"
-              className="tactile-btn inline-flex min-h-[38px] items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-xs font-semibold text-[#F8FAFC] hover:bg-white/10 sm:px-4"
+              className="tactile-btn inline-flex min-h-[38px] items-center gap-1.5 whitespace-nowrap px-2 py-1.5 text-[11px] font-semibold text-[#F8FAFC] hover:bg-white/10 sm:px-4 sm:text-xs"
             >
               <Users className="h-3.5 w-3.5 text-[#10B981]" aria-hidden="true" />
               <span>Vai ai posti</span>
@@ -97,7 +97,7 @@ export function ActOneExterior({
               type="button"
               onClick={onJumpToTrailer}
               data-testid="quick-jump-route"
-              className="tactile-btn inline-flex min-h-[38px] items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-xs font-semibold text-[#F8FAFC] hover:bg-white/10 sm:px-4"
+              className="tactile-btn inline-flex min-h-[38px] items-center gap-1.5 whitespace-nowrap px-2 py-1.5 text-[11px] font-semibold text-[#F8FAFC] hover:bg-white/10 sm:px-4 sm:text-xs"
             >
               <Compass className="h-3.5 w-3.5 text-[#38BDF8]" aria-hidden="true" />
               <span>Vedi percorso</span>
