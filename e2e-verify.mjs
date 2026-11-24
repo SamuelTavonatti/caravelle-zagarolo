@@ -45,8 +45,10 @@ async function runFlowForViewport(browser, vp) {
 
   // 1. Verify Act I Three.js 3D Studio Canvas, 0 Sketchfab references, 8/8 DISPONIBILI, and zero overflow
   const act1Check = await page.evaluate(() => {
-    const canvas = document.querySelector('[data-testid="caravelle-3d-canvas"] canvas');
-    const rect = canvas ? canvas.getBoundingClientRect() : null;
+    const imgs = ['caravelle-closed-img', 'caravelle-open-img'].map(
+      (id) => document.querySelector(`[data-testid="${id}"]`)?.naturalWidth || 0
+    );
+    const rect = imgs.every((n) => n > 400) ? { width: 999, height: 999 } : null;
     const avail = document.querySelector('[data-testid="hero-availability-badge"]')?.textContent || '';
     const hasSketchfab = document.documentElement.innerHTML.toLowerCase().includes('sketchfab');
     return {
@@ -60,7 +62,7 @@ async function runFlowForViewport(browser, vp) {
     throw new Error(`[${vp.name}] Act I horizontal overflow: ${act1Check.overflowX}px`);
   }
   if (!act1Check.canvasReady) {
-    throw new Error(`[${vp.name}] Three.js 3D studio canvas failed to mount!`);
+    throw new Error(`[${vp.name}] closed/open studio photos failed to load (naturalWidth <= 400)!`);
   }
   if (act1Check.hasSketchfab) {
     throw new Error(`[${vp.name}] Found unexpected Sketchfab reference in Act I DOM!`);
@@ -71,7 +73,16 @@ async function runFlowForViewport(browser, vp) {
   await page.screenshot({ path: path.join(outDir, `${vp.name}-01-act1-azure-studio.png`) });
 
   // Trigger 3D sliding door + 90° overhead camera transition -> Act II
-  await page.getByTestId('open-door-cta').click();
+  await page.getByTestId('door-hit-zone').hover();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(outDir, `${vp.name}-01b-door-hover.png`) });
+  await page.getByTestId('door-hit-zone').click();
+  await page.waitForTimeout(900);
+  const openOpacity = await page.evaluate(
+    () => parseFloat(getComputedStyle(document.querySelector('[data-testid="caravelle-open-img"]')).opacity)
+  );
+  if (openOpacity < 0.95) throw new Error(`[${vp.name}] open photo not revealed (opacity ${openOpacity})`);
+  await page.screenshot({ path: path.join(outDir, `${vp.name}-01c-door-open.png`) });
   await page.getByTestId('act-two-cabin').waitFor({ state: 'visible', timeout: 6000 });
   await page.waitForTimeout(400);
 
@@ -145,6 +156,7 @@ async function runFlowForViewport(browser, vp) {
   if (!startBanner?.includes('Gocciadoro')) {
     throw new Error(`[${vp.name}] Expected Via Gocciadoro 1 departure, got: ${startBanner}`);
   }
+  await page.getByTestId('mini-caravelle-marker').waitFor({ state: 'attached', timeout: 20000 }).catch(() => {});
   const hasMiniVan = await page.getByTestId('mini-caravelle-marker').count();
   if (hasMiniVan === 0) {
     throw new Error(`[${vp.name}] Mini white VW Caravelle map marker not mounted!`);

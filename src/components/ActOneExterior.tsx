@@ -35,10 +35,10 @@ export function ActOneExterior({
     setDoorPhase('sliding');
     window.setTimeout(() => {
       setDoorPhase('overhead');
-    }, 520);
+    }, 1150);
     window.setTimeout(() => {
       onEnterCabin();
-    }, 1180);
+    }, 1750);
   };
 
   return (
@@ -50,7 +50,7 @@ export function ActOneExterior({
       {/* True Interactive 3D Dark Architectural Studio + Azure Focus Spotlight (Three.js) */}
       <motion.div
         className="absolute inset-0 h-full w-full"
-        animate={{ opacity: doorPhase === 'overhead' ? 0.14 : 1 }}
+        animate={{ opacity: doorPhase === 'overhead' ? 0.0 : 1 }}
         transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
       >
         <Caravelle3DStage
