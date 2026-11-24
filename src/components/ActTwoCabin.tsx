@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import {
   ArrowLeft,
   ArrowRightLeft,
+  Box,
   Check,
   Compass,
   Lock,
@@ -10,8 +11,9 @@ import {
   Trash2,
   UserCheck,
   Wifi,
+  X,
 } from 'lucide-react';
-import { SEAT_MAP, SEATS } from '../data/routeData';
+import { SEAT_MAP, SEATS, SKETCHFAB_T5_EMBED_URL } from '../data/routeData';
 import type { SyncMode } from '../services/seatSync';
 import type { BookingInput, BookingsMap, SeatBooking, SeatId } from '../types/roadtrip';
 import { BookingModal } from './BookingModal';
@@ -44,7 +46,6 @@ export function ActTwoCabin({
   onOpenTrailer,
   onModalToggle,
 }: ActTwoCabinProps) {
-  // Default selection: user's seat if booked, else first free seat
   const [selectedSeatId, setSelectedSeatId] = useState<SeatId>(() => {
     if (myBooking) return myBooking.seatId;
     const firstFree = SEATS.find((s) => !bookings[s.id]);
@@ -52,14 +53,15 @@ export function ActTwoCabin({
   });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [is3dModelOpen, setIs3dModelOpen] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [confirmedSeatId, setConfirmedSeatId] = useState<SeatId | null>(null);
 
   useEffect(() => {
-    onModalToggle?.(isModalOpen || confirmedSeatId !== null);
-  }, [isModalOpen, confirmedSeatId, onModalToggle]);
+    onModalToggle?.(isModalOpen || is3dModelOpen || confirmedSeatId !== null);
+  }, [isModalOpen, is3dModelOpen, confirmedSeatId, onModalToggle]);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -88,7 +90,6 @@ export function ActTwoCabin({
       await onBookSeat(selectedSeatId, input);
       setIsModalOpen(false);
       setConfirmedSeatId(selectedSeatId);
-      // Show animated green checkmark motion graphic, then raise black curtain
       window.setTimeout(() => {
         setConfirmedSeatId(null);
         onBookingCelebrationDone();
@@ -136,25 +137,19 @@ export function ActTwoCabin({
     const isOther = Boolean(occupant && !isMine);
     const isSelected = selectedSeatId === seatId;
 
-    // Visual states:
-    // - Selected available seat -> vibrant emerald green (#10B981)
-    // - My booked seat -> distinct emerald ring & tinted fill
-    // - Booked by other -> muted obsidian-slate with occupant name & pickup
-    // - Available unselected -> clean elevated tonal tile
     let containerClasses =
-      'border-white/12 bg-[#181E27] text-[#F5F6F8] hover:border-[#10B981]/60 hover:bg-[#1E2733]';
+      'border-white/12 bg-[#141418] text-[#F8FAFC] hover:border-white/35 hover:bg-[#1B1B20]';
 
     if (isSelected && !occupant) {
-      containerClasses =
-        'border-[#34D399] bg-[#10B981] text-[#042419] shadow-[0_12px_28px_-6px_rgba(16,185,129,0.58)]';
+      containerClasses = 'border-[#10B981] bg-[#10B981] text-[#042419]';
     } else if (isMine) {
       containerClasses = isSelected
-        ? 'border-[#34D399] bg-[#10B981] text-[#042419] shadow-[0_12px_28px_-6px_rgba(16,185,129,0.55)]'
-        : 'border-[#10B981] bg-[#10B981]/18 text-[#ECFDF5]';
+        ? 'border-[#10B981] bg-[#10B981] text-[#042419]'
+        : 'border-[#10B981] bg-[#10B981]/14 text-[#ECFDF5]';
     } else if (isOther) {
       containerClasses = isSelected
-        ? 'border-white/35 bg-[#151A22] text-[#A4AEBC]'
-        : 'border-white/8 bg-[#12161D] text-[#8D97A6] opacity-90 hover:border-white/20';
+        ? 'border-white/40 bg-[#141418] text-[#CBD5E1]'
+        : 'border-white/10 bg-[#0E0E11] text-[#94A3B8] hover:border-white/25';
     }
 
     return (
@@ -170,9 +165,8 @@ export function ActTwoCabin({
             ? `Posto ${seatId}, ${isMine ? 'il tuo posto' : `occupato da ${occupant.firstName}`}, raccolta ${occupant.pickupLocation}`
             : `Posto ${seatId}, libero`
         }
-        className={`tactile-btn group relative flex min-h-[84px] w-full flex-col justify-between rounded-[16px] border p-2.5 text-left sm:min-h-[92px] sm:p-3 ${containerClasses}`}
+        className={`tactile-btn group relative flex min-h-[84px] w-full flex-col justify-between rounded-[4px] border p-2.5 text-left sm:min-h-[92px] sm:p-3 ${containerClasses}`}
       >
-        {/* Top Row: Seat Code + State Icon */}
         <div className="flex w-full items-center justify-between gap-1">
           <span className="font-mono-telemetry text-xs font-bold tracking-tight sm:text-sm">
             {seatId}
@@ -183,18 +177,17 @@ export function ActTwoCabin({
               aria-hidden="true"
             />
           ) : isOther ? (
-            <Lock className="h-3.5 w-3.5 shrink-0 text-[#7D8796]" aria-hidden="true" />
+            <Lock className="h-3.5 w-3.5 shrink-0 text-[#71717A]" aria-hidden="true" />
           ) : isSelected ? (
             <Check className="h-4 w-4 shrink-0 text-[#042419]" aria-hidden="true" />
           ) : (
             <span
-              className="h-2 w-2 rounded-full bg-[#10B981]/70 group-hover:bg-[#10B981]"
+              className="h-1.5 w-1.5 bg-[#52525B] group-hover:bg-[#10B981]"
               aria-hidden="true"
             />
           )}
         </div>
 
-        {/* Bottom Row: Occupant Name + Pickup or Available Status */}
         <div className="mt-1.5 min-w-0">
           {occupant ? (
             <>
@@ -207,7 +200,7 @@ export function ActTwoCabin({
                     ? 'text-[#042419]/80'
                     : isMine
                       ? 'text-[#A7F3D0]'
-                      : 'text-[#8D97A6]'
+                      : 'text-[#8E8E98]'
                 }`}
               >
                 {occupant.pickupLocation}
@@ -215,11 +208,11 @@ export function ActTwoCabin({
             </>
           ) : (
             <div
-              className={`text-xs font-semibold ${
-                isSelected ? 'text-[#042419]' : 'text-[#A4AEBC]'
+              className={`font-mono-telemetry text-[11px] font-semibold uppercase tracking-[0.04em] ${
+                isSelected ? 'text-[#042419]' : 'text-[#A1A1AA]'
               }`}
             >
-              {isSelected ? 'Selezionato' : 'Libero'}
+              {isSelected ? 'Scelto' : 'Libero'}
             </div>
           )}
         </div>
@@ -231,63 +224,124 @@ export function ActTwoCabin({
     <motion.section
       aria-label="Mappa cabina Caravelle T5"
       data-testid="act-two-cabin"
-      initial={{ opacity: 0, scale: 1.05 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ type: 'spring', duration: 0.55, bounce: 0 }}
-      className="min-h-[100dvh] w-full bg-[#090B0E] text-[#F5F6F8]"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.35, ease: [0.23, 1, 0.32, 1] }}
+      className="min-h-[100dvh] w-full bg-[#09090B] text-[#F8FAFC]"
     >
-      {/* Top Bar */}
-      <header className="sticky top-0 z-30 border-b border-white/8 bg-[#090B0E]/85 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3.5 sm:px-8">
+      {/* Top Architectural Navigation Bar */}
+      <header className="sticky top-0 z-30 border-b border-white/12 bg-[#09090B]/92 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-3 sm:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
               onClick={onBackToExterior}
               aria-label="Torna alla vista esterna del Caravelle"
-              className="tactile-btn inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-[#11151B] text-[#C7D0DC] hover:border-white/25 hover:text-[#F5F6F8]"
+              className="tactile-btn inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[4px] border border-white/12 bg-[#111114] text-[#D4D4D8] hover:border-white/30 hover:text-[#F8FAFC]"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             </button>
             <div className="min-w-0">
-              <h1 className="truncate text-base font-bold tracking-tight text-[#F5F6F8] sm:text-lg">
+              <h1 className="truncate text-sm font-extrabold tracking-[-0.025em] text-[#F8FAFC] sm:text-base">
                 Cabina Caravelle T5
               </h1>
-              <div className="flex items-center gap-1.5 text-xs text-[#A4AEBC] whitespace-nowrap">
-                <span className="font-mono-telemetry">{freeCount}/8 liberi</span>
+              <div className="flex items-center gap-1.5 font-mono-telemetry text-[11px] text-[#A1A1AA] whitespace-nowrap">
+                <span>{freeCount}/8 DISPONIBILI</span>
                 <span aria-hidden="true">·</span>
-                <span className="inline-flex items-center gap-1 text-[#6EE7B7]">
+                <span className="inline-flex items-center gap-1 text-[#34D399]">
                   <Wifi className="h-3 w-3 shrink-0" aria-hidden="true" />
-                  <span>{syncMode === 'firebase' ? 'Sync cloud' : 'Sync live'}</span>
+                  <span>{syncMode === 'firebase' ? 'CLOUD' : 'LIVE'}</span>
                 </span>
               </div>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onOpenTrailer}
-            data-testid="cabin-view-route-btn"
-            className="tactile-btn inline-flex min-h-[44px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-white/12 bg-[#11151B] px-3.5 py-2 text-xs font-semibold text-[#F5F6F8] hover:border-white/25 hover:bg-[#181E27] sm:px-4 sm:text-sm"
-          >
-            <Compass className="h-4 w-4 shrink-0 text-[#E5B769]" aria-hidden="true" />
-            <span>Vedi percorso</span>
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {/* Sharp-Edged Sketchfab 3D Model Toggle */}
+            <button
+              type="button"
+              onClick={() => setIs3dModelOpen((v) => !v)}
+              data-testid="toggle-3d-model-btn"
+              aria-expanded={is3dModelOpen}
+              className={`tactile-btn inline-flex min-h-[44px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[4px] border px-3 py-2 text-xs font-semibold sm:px-3.5 ${
+                is3dModelOpen
+                  ? 'border-[#10B981] bg-[#10B981]/15 text-[#34D399]'
+                  : 'border-white/15 bg-[#111114] text-[#F8FAFC] hover:border-white/30'
+              }`}
+            >
+              <Box className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>Modello 3D</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenTrailer}
+              data-testid="cabin-view-route-btn"
+              className="tactile-btn inline-flex min-h-[44px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[4px] border border-white/15 bg-[#111114] px-3 py-2 text-xs font-semibold text-[#F8FAFC] hover:border-white/30 sm:px-4"
+            >
+              <Compass className="h-3.5 w-3.5 shrink-0 text-[#4285F4]" aria-hidden="true" />
+              <span className="hidden sm:inline">Vedi percorso</span>
+              <span className="sm:hidden">Percorso</span>
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Main Content Grid */}
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
-        {/* Toast feedback for seat switch or release */}
+      {/* Main Content */}
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-8">
+        {/* Optional Expandable Sketchfab 3D VW T5 Caravelle Panel */}
+        <AnimatePresence>
+          {is3dModelOpen && (
+            <motion.div
+              data-testid="sketchfab-3d-panel"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.22 }}
+              className="mb-6 overflow-hidden rounded-[4px] border border-white/15 bg-[#111114]"
+            >
+              <div className="flex items-center justify-between border-b border-white/12 px-4 py-3">
+                <div>
+                  <h2 className="text-sm font-bold tracking-tight text-[#F8FAFC]">
+                    Modello 3D · Volkswagen T5 Caravelle
+                  </h2>
+                  <p className="font-mono-telemetry text-[11px] text-[#A1A1AA]">
+                    ISPEZIONE INTERATTIVA SKETCHFAB · RUOTA E INGRANDISCI
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIs3dModelOpen(false)}
+                  aria-label="Chiudi modello 3D"
+                  className="tactile-btn inline-flex h-11 w-11 items-center justify-center rounded-[4px] border border-white/12 bg-[#09090B] text-[#A1A1AA] hover:text-[#F8FAFC]"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+              <div className="aspect-[16/9] max-h-[460px] w-full bg-[#050507]">
+                <iframe
+                  title="Volkswagen T5 Caravelle 3D Viewer"
+                  src={SKETCHFAB_T5_EMBED_URL}
+                  className="h-full w-full border-0"
+                  allow="autoplay; fullscreen; xr-spatial-tracking"
+                  allowFullScreen
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Status Toast */}
         <AnimatePresence>
           {toastMessage && (
             <motion.div
               role="status"
               data-testid="cabin-toast"
-              initial={{ opacity: 0, y: -12 }}
+              initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.22 }}
-              className="mb-5 flex items-center gap-2.5 rounded-2xl border border-[#10B981]/35 bg-[#10B981]/14 px-4 py-3 text-sm font-medium text-[#A7F3D0]"
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="mb-5 flex items-center gap-2.5 rounded-[4px] border border-[#10B981]/50 bg-[#10B981]/12 px-4 py-3 text-sm font-medium text-[#A7F3D0]"
             >
               <Check className="h-4 w-4 shrink-0 text-[#10B981]" aria-hidden="true" />
               <span>{toastMessage}</span>
@@ -295,123 +349,109 @@ export function ActTwoCabin({
           )}
         </AnimatePresence>
 
-        {/* Active User Booking Banner (with mandatory Release option) */}
+        {/* Active User Booking Banner */}
         {myBooking && (
           <div
             data-testid="my-booking-banner"
-            className="mb-6 flex flex-col gap-3 rounded-[22px] border border-[#10B981]/30 bg-[#11151B] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+            className="mb-6 flex flex-col gap-3 rounded-[4px] border border-[#10B981]/40 bg-[#111114] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"
           >
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#10B981]/18 font-mono-telemetry text-sm font-bold text-[#34D399]">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[4px] border border-[#10B981]/45 bg-[#10B981]/14 font-mono-telemetry text-sm font-bold text-[#34D399]">
                 {myBooking.seatId}
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-[#F5F6F8]">
-                  Il tuo posto è il <span className="font-mono-telemetry text-[#34D399]">{myBooking.seatId}</span> · {myBooking.firstName} {myBooking.lastName}
+                <p className="text-sm font-bold text-[#F8FAFC]">
+                  Il tuo posto è il{' '}
+                  <span className="font-mono-telemetry text-[#34D399]">{myBooking.seatId}</span> ·{' '}
+                  {myBooking.firstName} {myBooking.lastName}
                 </p>
-                <p className="mt-0.5 flex items-center gap-1.5 text-xs text-[#A4AEBC]">
+                <p className="mt-0.5 flex items-center gap-1.5 text-xs text-[#A1A1AA]">
                   <MapPin className="h-3.5 w-3.5 shrink-0 text-[#10B981]" aria-hidden="true" />
                   <span className="truncate">Raccolta: {myBooking.pickupLocation}</span>
                 </p>
-                <p className="mt-1 text-xs text-[#8D97A6]">
-                  Puoi cambiare posto in qualsiasi momento selezionandone uno libero sulla mappa.
+                <p className="mt-1 text-xs text-[#71717A]">
+                  Seleziona un altro posto libero sulla mappa per spostarti senza reinserire i dati.
                 </p>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handleReleaseSeat}
-                disabled={isBusy}
-                data-testid="release-seat-btn"
-                className="tactile-btn inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-white/12 bg-[#181E27] px-4 py-2 text-xs font-semibold text-[#FCA5A5] hover:border-[#EF4444]/45 hover:bg-[#EF4444]/12"
-              >
-                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>Libera il mio posto</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleReleaseSeat}
+              disabled={isBusy}
+              data-testid="release-seat-btn"
+              className="tactile-btn inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-[4px] border border-white/15 bg-[#09090B] px-4 py-2 text-xs font-semibold text-[#FCA5A5] hover:border-[#EF4444]/50 hover:bg-[#EF4444]/10"
+            >
+              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Libera il mio posto</span>
+            </button>
           </div>
         )}
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start">
-          {/* LEFT COLUMN (7 cols): Top-Down Overhead 2008 VW Caravelle T5 Cabin Blueprint */}
+          {/* LEFT (7 cols): Architectural Top-Down 8-Seat Cabin Plan */}
           <div className="lg:col-span-7">
-            <div className="rounded-[26px] border border-white/10 bg-[#11151B] p-4 sm:p-6">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div className="rounded-[4px] border border-white/12 bg-[#111114] p-4 sm:p-6">
+              <div className="mb-5 flex flex-wrap items-end justify-between gap-2 border-b border-white/10 pb-4">
                 <div>
-                  <h2 className="text-lg font-bold tracking-tight text-[#F5F6F8]">
-                    Mappa dall’alto · 8 posti passeggeri
+                  <h2 className="text-lg font-extrabold tracking-[-0.025em] text-[#F8FAFC]">
+                    Pianta cabina · 8 posti passeggeri
                   </h2>
-                  <p className="text-xs text-[#A4AEBC]">
-                    Tocca un posto libero per vedere la visuale reale dall’abitacolo
+                  <p className="mt-0.5 text-xs text-[#A1A1AA]">
+                    Seleziona un posto libero per ispezionare la visuale dall’abitacolo
                   </p>
                 </div>
 
-                {/* Compact Legend */}
-                <div className="flex items-center gap-3 text-[11px] text-[#A4AEBC]">
+                <div className="flex items-center gap-3 font-mono-telemetry text-[11px] uppercase tracking-[0.04em] text-[#A1A1AA]">
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-[#181E27] ring-1 ring-white/25" />
+                    <span className="h-2 w-2 border border-white/35 bg-[#141418]" />
                     Libero
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-[#10B981]" />
+                    <span className="h-2 w-2 bg-[#10B981]" />
                     Scelto
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-[#334155]" />
+                    <span className="h-2 w-2 bg-[#3F3F46]" />
                     Occupato
                   </span>
                 </div>
               </div>
 
-              {/* Overhead Caravelle T5 Vehicle Chassis Frame */}
-              <div className="relative mx-auto max-w-[460px]">
-                {/* Left & Right Side Mirrors */}
-                <div
-                  className="pointer-events-none absolute -left-2.5 top-[92px] hidden h-9 w-2.5 rounded-l-lg bg-[#273140] border border-white/10 sm:block"
-                  aria-hidden="true"
-                />
-                <div
-                  className="pointer-events-none absolute -right-2.5 top-[92px] hidden h-9 w-2.5 rounded-r-lg bg-[#273140] border border-white/10 sm:block"
-                  aria-hidden="true"
-                />
-
-                {/* Caravelle Outer White-Tinted Roof Contour */}
-                <div className="relative rounded-t-[64px] rounded-b-[34px] border-2 border-[#DCE3EE]/22 bg-[#0C0F14] px-3.5 pb-5 pt-4 sm:px-5 sm:pb-6 sm:pt-5">
-                  {/* Front Hood & Panoramic Windshield */}
-                  <div className="mb-4 flex flex-col items-center">
-                    <div className="h-2 w-24 rounded-full bg-white/12" aria-hidden="true" />
-                    <div className="mt-2.5 flex h-9 w-full items-center justify-center rounded-t-[36px] rounded-b-xl border border-white/10 bg-gradient-to-b from-[#1E2A3A]/75 to-[#121720]/70">
-                      <span className="font-mono-telemetry text-[11px] tracking-wider uppercase text-[#A4AEBC]">
-                        Parabrezza anteriore
-                      </span>
-                    </div>
+              {/* Architectural Top-Down Caravelle Chassis */}
+              <div className="mx-auto max-w-[460px]">
+                <div className="relative rounded-[4px] border border-white/20 bg-[#09090B] px-3.5 pb-5 pt-4 sm:px-5 sm:pb-6 sm:pt-5">
+                  {/* Front Windshield Bar */}
+                  <div className="mb-5 flex h-9 w-full items-center justify-center rounded-[2px] border border-white/12 bg-[#141418]">
+                    <span className="font-mono-telemetry text-[11px] tracking-[0.12em] uppercase text-[#A1A1AA]">
+                      Parabrezza anteriore
+                    </span>
                   </div>
 
-                  {/* ROW 1: Front Row — Locked Driver (Left) + F1 & F2 (Right Bench) */}
-                  <div className="mb-4">
-                    <div className="mb-2 flex items-center justify-between px-1">
-                      <span className="text-xs font-semibold text-[#C7D0DC]">Prima fila</span>
-                      <span className="font-mono-telemetry text-[11px] text-[#7D8796]">
-                        Conducente + F1 · F2
+                  {/* Row 1: Locked Driver + F1 + F2 */}
+                  <div className="mb-5">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="font-mono-telemetry text-[11px] font-semibold uppercase tracking-[0.06em] text-[#E4E4E7]">
+                        Prima fila
+                      </span>
+                      <span className="font-mono-telemetry text-[11px] text-[#71717A]">
+                        GUIDA + F1 · F2
                       </span>
                     </div>
-                    <div className="grid grid-cols-3 gap-2.5">
-                      {/* Locked Driver Seat */}
+                    <div className="grid grid-cols-3 gap-2">
                       <div
                         data-testid="driver-seat-locked"
                         aria-label="Posto conducente bloccato"
-                        className="flex min-h-[84px] flex-col justify-between rounded-[16px] border border-dashed border-white/12 bg-[#0F131A] p-2.5 text-[#7D8796] sm:min-h-[92px] sm:p-3"
+                        className="flex min-h-[84px] flex-col justify-between rounded-[4px] border border-dashed border-white/15 bg-[#0D0D10] p-2.5 text-[#71717A] sm:min-h-[92px] sm:p-3"
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-mono-telemetry text-[11px] font-semibold">GUIDA</span>
-                          <Lock className="h-3.5 w-3.5 text-[#7D8796]" aria-hidden="true" />
+                          <Lock className="h-3.5 w-3.5 text-[#71717A]" aria-hidden="true" />
                         </div>
                         <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-1.5">
                           <svg
                             viewBox="0 0 24 24"
-                            className="h-4 w-4 shrink-0 text-[#7D8796]"
+                            className="h-4 w-4 shrink-0 text-[#71717A]"
                             fill="none"
                             stroke="currentColor"
                             strokeWidth="2"
@@ -421,59 +461,61 @@ export function ActTwoCabin({
                             <circle cx="12" cy="12" r="2" />
                             <path d="M12 14v6M5 10l5 2M19 10l-5 2" />
                           </svg>
-                          <span className="text-[11px] font-semibold text-[#94A3B8] sm:text-xs">
+                          <span className="text-[11px] font-semibold text-[#A1A1AA] sm:text-xs">
                             Conducente
                           </span>
                         </div>
                       </div>
 
-                      {/* Selectable Front Passenger Bench (F1, F2) */}
                       {renderSeatButton('F1')}
                       {renderSeatButton('F2')}
                     </div>
                   </div>
 
-                  {/* ROW 2: Middle Row (M1, M2, M3) + Open Right-Side Sliding Door Indicator */}
-                  <div className="relative mb-4">
-                    <div className="mb-2 flex items-center justify-between px-1">
-                      <span className="text-xs font-semibold text-[#C7D0DC]">Seconda fila</span>
-                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#34D399]">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />
-                        Portellone destro aperto
+                  {/* Row 2: M1, M2, M3 + Right Sliding Doorway Rail Marker */}
+                  <div className="relative mb-5">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="font-mono-telemetry text-[11px] font-semibold uppercase tracking-[0.06em] text-[#E4E4E7]">
+                        Seconda fila
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 font-mono-telemetry text-[11px] font-semibold text-[#34D399]">
+                        <span className="h-1.5 w-1.5 bg-[#10B981]" />
+                        PORTELLONE APERTO
                       </span>
                     </div>
 
-                    {/* Emerald right-edge visual accent marking the open sliding doorway */}
                     <div
-                      className="pointer-events-none absolute -right-[16px] top-7 bottom-1 w-1.5 rounded-full bg-[#10B981] sm:-right-[22px]"
+                      className="pointer-events-none absolute -right-[15px] top-7 bottom-0 w-1 bg-[#10B981] sm:-right-[21px]"
                       aria-hidden="true"
                     />
 
-                    <div className="grid grid-cols-3 gap-2.5">
+                    <div className="grid grid-cols-3 gap-2">
                       {renderSeatButton('M1')}
                       {renderSeatButton('M2')}
                       {renderSeatButton('M3')}
                     </div>
                   </div>
 
-                  {/* ROW 3: Rear Row (R1, R2, R3) */}
-                  <div className="mb-4">
-                    <div className="mb-2 flex items-center justify-between px-1">
-                      <span className="text-xs font-semibold text-[#C7D0DC]">Terza fila</span>
-                      <span className="font-mono-telemetry text-[11px] text-[#7D8796]">
+                  {/* Row 3: R1, R2, R3 */}
+                  <div className="mb-5">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="font-mono-telemetry text-[11px] font-semibold uppercase tracking-[0.06em] text-[#E4E4E7]">
+                        Terza fila
+                      </span>
+                      <span className="font-mono-telemetry text-[11px] text-[#71717A]">
                         R1 · R2 · R3
                       </span>
                     </div>
-                    <div className="grid grid-cols-3 gap-2.5">
+                    <div className="grid grid-cols-3 gap-2">
                       {renderSeatButton('R1')}
                       {renderSeatButton('R2')}
                       {renderSeatButton('R3')}
                     </div>
                   </div>
 
-                  {/* Trunk / Bagagliaio */}
-                  <div className="flex h-10 items-center justify-center rounded-b-[20px] rounded-t-lg border border-dashed border-white/10 bg-[#11151B]/75">
-                    <span className="font-mono-telemetry text-[11px] tracking-wider uppercase text-[#7D8796]">
+                  {/* Trunk */}
+                  <div className="flex h-9 items-center justify-center rounded-[2px] border border-dashed border-white/12 bg-[#111114]">
+                    <span className="font-mono-telemetry text-[11px] tracking-[0.1em] uppercase text-[#71717A]">
                       Bagagliaio · Zaini e valigie
                     </span>
                   </div>
@@ -482,47 +524,45 @@ export function ActTwoCabin({
             </div>
           </div>
 
-          {/* RIGHT COLUMN (5 cols): Interactive Seat POV Preview + Context Action Card */}
+          {/* RIGHT (5 cols): Seat POV Preview + Sharp Action Panel */}
           <div className="space-y-4 lg:col-span-5 lg:sticky lg:top-24">
             <SeatPovPreview seat={selectedSeat} />
 
-            {/* Action & Status Panel */}
-            <div className="rounded-[22px] border border-white/10 bg-[#11151B] p-5">
+            <div className="rounded-[4px] border border-white/12 bg-[#111114] p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-lg font-bold tracking-tight text-[#F5F6F8]">
+                  <h3 className="text-lg font-extrabold tracking-[-0.025em] text-[#F8FAFC]">
                     Posto <span className="font-mono-telemetry text-[#10B981]">{selectedSeat.id}</span>
                   </h3>
-                  <p className="mt-0.5 text-sm text-[#A4AEBC]">{selectedSeat.shortNote}</p>
+                  <p className="mt-0.5 text-sm text-[#A1A1AA]">{selectedSeat.shortNote}</p>
                 </div>
 
                 <span
-                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                  className={`shrink-0 rounded-[2px] border px-2.5 py-1 font-mono-telemetry text-[11px] font-semibold uppercase tracking-[0.05em] ${
                     isSelectedMine
-                      ? 'bg-[#10B981]/20 text-[#6EE7B7] border border-[#10B981]/35'
+                      ? 'border-[#10B981]/50 bg-[#10B981]/15 text-[#34D399]'
                       : isSelectedByOther
-                        ? 'bg-white/8 text-[#A4AEBC] border border-white/10'
-                        : 'bg-[#10B981]/14 text-[#34D399] border border-[#10B981]/30'
+                        ? 'border-white/12 bg-[#18181B] text-[#A1A1AA]'
+                        : 'border-[#10B981]/40 bg-[#10B981]/10 text-[#34D399]'
                   }`}
                 >
                   {isSelectedMine
-                    ? 'Il tuo posto'
+                    ? 'Tuo posto'
                     : isSelectedByOther
                       ? 'Occupato'
-                      : 'Disponibile'}
+                      : 'Libero'}
                 </span>
               </div>
 
               {actionError && (
                 <p
                   role="alert"
-                  className="mt-3 rounded-xl border border-[#EF4444]/40 bg-[#EF4444]/12 px-3.5 py-2.5 text-xs text-[#FCA5A5]"
+                  className="mt-3 rounded-[4px] border border-[#EF4444]/45 bg-[#EF4444]/12 px-3.5 py-2.5 text-xs text-[#FCA5A5]"
                 >
                   {actionError}
                 </p>
               )}
 
-              {/* Contextual Action CTA */}
               <div className="mt-4">
                 {isSelectedFree && !myBooking && (
                   <button
@@ -530,7 +570,7 @@ export function ActTwoCabin({
                     onClick={() => setIsModalOpen(true)}
                     disabled={isBusy}
                     data-testid="book-seat-btn"
-                    className="tactile-btn tactile-lift inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-full bg-[#10B981] px-6 py-3.5 text-base font-bold text-[#042419] shadow-[0_14px_30px_-8px_rgba(16,185,129,0.5)] hover:bg-[#34D399]"
+                    className="tactile-btn inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-[4px] bg-[#10B981] px-6 py-3 text-base font-bold text-[#042419] hover:bg-[#34D399]"
                   >
                     <Check className="h-5 w-5" aria-hidden="true" />
                     <span>Prenota</span>
@@ -544,25 +584,25 @@ export function ActTwoCabin({
                       onClick={handleSwitchSeat}
                       disabled={isBusy}
                       data-testid="switch-seat-btn"
-                      className="tactile-btn tactile-lift inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-full bg-[#10B981] px-6 py-3.5 text-base font-bold text-[#042419] shadow-[0_14px_30px_-8px_rgba(16,185,129,0.5)] hover:bg-[#34D399] disabled:opacity-65"
+                      className="tactile-btn inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-[4px] bg-[#10B981] px-6 py-3 text-base font-bold text-[#042419] hover:bg-[#34D399] disabled:opacity-65"
                     >
-                      <ArrowRightLeft className="h-5 w-5" aria-hidden="true" />
+                      <ArrowRightLeft className="h-4 w-4" aria-hidden="true" />
                       <span>{isBusy ? 'Spostamento…' : 'Sposta qui il mio posto'}</span>
                     </button>
-                    <p className="text-center text-xs text-[#A4AEBC]">
-                      Libera automaticamente il posto{' '}
-                      <span className="font-mono-telemetry font-semibold text-[#F5F6F8]">
+                    <p className="text-center text-xs text-[#A1A1AA]">
+                      Libera automaticamente{' '}
+                      <span className="font-mono-telemetry font-semibold text-[#F8FAFC]">
                         {myBooking.seatId}
                       </span>{' '}
-                      mantenendo i tuoi dati ({myBooking.firstName} · {myBooking.pickupLocation}).
+                      conservando i tuoi dati ({myBooking.firstName} · {myBooking.pickupLocation}).
                     </p>
                   </div>
                 )}
 
                 {isSelectedMine && myBooking && (
                   <div className="space-y-3">
-                    <div className="rounded-2xl border border-[#10B981]/25 bg-[#10B981]/10 px-4 py-3 text-sm text-[#D1FAE5]">
-                      <p className="font-semibold">
+                    <div className="rounded-[4px] border border-[#10B981]/35 bg-[#10B981]/10 px-4 py-3 text-sm text-[#D1FAE5]">
+                      <p className="font-bold">
                         {myBooking.firstName} {myBooking.lastName}
                       </p>
                       <p className="mt-0.5 text-xs text-[#A7F3D0]">
@@ -573,7 +613,7 @@ export function ActTwoCabin({
                       type="button"
                       onClick={onOpenTrailer}
                       data-testid="my-seat-open-trailer-btn"
-                      className="tactile-btn inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-[#F5F6F8] px-5 py-3 text-sm font-bold text-[#090B0E] hover:bg-white"
+                      className="tactile-btn inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-[4px] bg-[#F8FAFC] px-5 py-3 text-sm font-bold text-[#09090B] hover:bg-white"
                     >
                       <Compass className="h-4 w-4" aria-hidden="true" />
                       <span>Vedi percorso e avvia trailer</span>
@@ -582,16 +622,16 @@ export function ActTwoCabin({
                 )}
 
                 {isSelectedByOther && selectedOccupant && (
-                  <div className="rounded-2xl border border-white/10 bg-[#181E27] px-4 py-3.5 text-sm">
-                    <p className="font-semibold text-[#F5F6F8]">
-                      Già prenotato da {selectedOccupant.firstName}
+                  <div className="rounded-[4px] border border-white/12 bg-[#09090B] px-4 py-3.5 text-sm">
+                    <p className="font-bold text-[#F8FAFC]">
+                      Occupato da {selectedOccupant.firstName}
                     </p>
-                    <p className="mt-1 flex items-center gap-1.5 text-xs text-[#A4AEBC]">
-                      <MapPin className="h-3.5 w-3.5 shrink-0 text-[#E5B769]" aria-hidden="true" />
-                      <span>Punto di raccolta: {selectedOccupant.pickupLocation}</span>
+                    <p className="mt-1 flex items-center gap-1.5 text-xs text-[#A1A1AA]">
+                      <MapPin className="h-3.5 w-3.5 shrink-0 text-[#4285F4]" aria-hidden="true" />
+                      <span>Raccolta: {selectedOccupant.pickupLocation}</span>
                     </p>
-                    <p className="mt-2 text-xs text-[#7D8796]">
-                      Questo posto non può essere sovrascritto. Scegli un altro posto libero sulla mappa.
+                    <p className="mt-2 text-xs text-[#71717A]">
+                      Questo posto non può essere sovrascritto. Scegli un posto libero sulla mappa.
                     </p>
                   </div>
                 )}
@@ -601,7 +641,6 @@ export function ActTwoCabin({
         </div>
       </main>
 
-      {/* Booking Form Modal */}
       <BookingModal
         seat={selectedSeat}
         isOpen={isModalOpen}
@@ -611,7 +650,7 @@ export function ActTwoCabin({
         onSubmit={handleConfirmNewBooking}
       />
 
-      {/* Animated Green Checkmark Motion Graphic Overlay after Submission */}
+      {/* Animated Green Checkmark Motion Graphic after Booking Submission */}
       <AnimatePresence>
         {confirmedSeatId && (
           <motion.div
@@ -619,64 +658,53 @@ export function ActTwoCabin({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#050507]/90 backdrop-blur-xl px-6 text-center"
+            transition={{ duration: 0.22 }}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#050507]/94 px-6 text-center backdrop-blur-md"
           >
             <div className="relative flex items-center justify-center">
-              {/* Radial Emerald Pulse Ring 1 */}
               <motion.span
-                initial={{ scale: 0.75, opacity: 0.7 }}
-                animate={{ scale: 1.85, opacity: 0 }}
-                transition={{ duration: 1.05, ease: [0.16, 1, 0.3, 1] }}
-                className="absolute h-28 w-28 rounded-full border-2 border-[#10B981]"
+                initial={{ scale: 0.8, opacity: 0.75 }}
+                animate={{ scale: 1.75, opacity: 0 }}
+                transition={{ duration: 0.95, ease: [0.16, 1, 0.3, 1] }}
+                className="absolute h-24 w-24 rounded-[4px] border-2 border-[#10B981]"
                 aria-hidden="true"
               />
-              {/* Radial Emerald Pulse Ring 2 */}
-              <motion.span
-                initial={{ scale: 0.85, opacity: 0.45 }}
-                animate={{ scale: 1.45, opacity: 0 }}
-                transition={{ duration: 0.9, delay: 0.14, ease: [0.16, 1, 0.3, 1] }}
-                className="absolute h-28 w-28 rounded-full bg-[#10B981]/25"
-                aria-hidden="true"
-              />
-
-              {/* Spring-Drawn SVG Checkmark Circle */}
               <motion.div
-                initial={{ scale: 0.85, opacity: 0 }}
+                initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                transition={{ type: 'spring', duration: 0.45, bounce: 0.18 }}
-                className="relative flex h-24 w-24 items-center justify-center rounded-full bg-[#10B981] shadow-[0_20px_50px_-10px_rgba(16,185,129,0.65)]"
+                transition={{ type: 'spring', duration: 0.42, bounce: 0.12 }}
+                className="relative flex h-24 w-24 items-center justify-center rounded-[4px] bg-[#10B981]"
               >
                 <svg viewBox="0 0 48 48" className="h-12 w-12" fill="none" aria-hidden="true">
                   <motion.path
                     d="M 11 25 L 20.5 34 L 37.5 15.5"
                     stroke="#042419"
                     strokeWidth="4.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                    strokeLinecap="square"
+                    strokeLinejoin="miter"
                     initial={{ pathLength: 0 }}
                     animate={{ pathLength: 1 }}
-                    transition={{ duration: 0.48, delay: 0.12, ease: [0.23, 1, 0.32, 1] }}
+                    transition={{ duration: 0.45, delay: 0.1, ease: [0.23, 1, 0.32, 1] }}
                   />
                 </svg>
               </motion.div>
             </div>
 
             <motion.h2
-              initial={{ opacity: 0, y: 12 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.32, delay: 0.2 }}
-              className="mt-6 text-2xl font-extrabold tracking-tight text-[#F5F6F8] sm:text-3xl"
+              transition={{ duration: 0.28, delay: 0.18 }}
+              className="mt-6 text-2xl font-extrabold tracking-[-0.03em] text-[#F8FAFC] sm:text-3xl"
             >
               Posto {confirmedSeatId} confermato
             </motion.h2>
             <motion.p
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.32, delay: 0.3 }}
-              className="mt-1.5 text-sm text-[#A4AEBC]"
+              transition={{ duration: 0.28, delay: 0.26 }}
+              className="mt-1.5 font-mono-telemetry text-xs uppercase tracking-[0.06em] text-[#A1A1AA]"
             >
-              Preparazione del percorso Trento → Zagarolo…
+              Preparazione itinerario Trento → Zagarolo…
             </motion.p>
           </motion.div>
         )}

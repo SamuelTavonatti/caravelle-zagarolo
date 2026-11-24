@@ -3,17 +3,17 @@
 
 @layer base {
   :root {
-    --canvas-obsidian: #090b0e;
+    --canvas-obsidian: #09090b;
     --curtain-black: #050507;
-    --surface-container: #11151b;
-    --surface-elevated: #181e27;
-    --ink-primary: #f5f6f8;
-    --ink-secondary: #a4aebc;
-    --ink-muted: #7d8796;
+    --surface-container: #111114;
+    --surface-elevated: #18181b;
+    --ink-primary: #f8fafc;
+    --ink-secondary: #a1a1aa;
+    --ink-muted: #71717a;
     --accent-emerald: #10b981;
-    --accent-emerald-hover: #059669;
-    --accent-gold: #e5b769;
-    --border-hairline: rgba(255, 255, 255, 0.09);
+    --gmaps-blue: #4285f4;
+    --gmaps-blue-dark: #1967d2;
+    --border-hairline: rgba(255, 255, 255, 0.12);
   }
 
   html {
@@ -34,10 +34,9 @@
 
   ::selection {
     background-color: rgba(16, 185, 129, 0.28);
-    color: #f5f6f8;
+    color: #f8fafc;
   }
 
-  /* Precision keyboard-only focus rings */
   :focus {
     outline: none;
   }
@@ -47,23 +46,21 @@
     outline-offset: 2px;
   }
 
-  /* Custom dark scrollbars */
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
 
   ::-webkit-scrollbar-track {
-    background: #090b0e;
+    background: #09090b;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #232b38;
-    border-radius: 9999px;
+    background: #27272a;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #334052;
+    background: #3f3f46;
   }
 }
 
@@ -72,48 +69,27 @@
   font-variant-numeric: tabular-nums;
 }
 
-.glass-dark {
-  background: rgba(13, 16, 22, 0.78);
-  backdrop-filter: blur(22px) saturate(180%);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.14),
-    0 20px 50px -15px rgba(0, 0, 0, 0.6);
+.surface-architectural {
+  background: rgba(9, 9, 11, 0.86);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.glass-daylight {
-  background: rgba(16, 19, 25, 0.62);
-  backdrop-filter: blur(20px) saturate(175%);
-  -webkit-backdrop-filter: blur(20px) saturate(175%);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
-    0 18px 42px -12px rgba(10, 12, 16, 0.5);
-}
-
-/* Tactile press response — keep color & fill atomic on the same frame */
+/* Tactile press response — zero background-color lag so emerald fill & text stay atomic */
 .tactile-btn {
   transition:
-    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
-    border-color 120ms ease,
-    box-shadow 140ms ease;
+    transform 110ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 120ms ease;
 }
 
 .tactile-btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .tactile-lift:hover:not(:disabled) {
-    transform: translateY(-2px);
-  }
+  transform: scale(0.98);
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .glass-dark,
-  .glass-daylight {
-    background: #11151b;
+  .surface-architectural {
+    background: #09090b;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
@@ -127,17 +103,17 @@
   }
 }
 
-/* MapLibre attribution compact styling */
+/* Sharp MapLibre attribution control */
 .maplibregl-ctrl-attrib {
-  background: rgba(9, 11, 14, 0.65) !important;
-  color: #a4aebc !important;
-  backdrop-filter: blur(10px);
+  background: rgba(9, 9, 11, 0.82) !important;
+  color: #a1a1aa !important;
   font-size: 10px !important;
-  border-radius: 9999px !important;
-  padding: 2px 8px !important;
-  margin: 0 10px 10px 0 !important;
+  border-radius: 2px !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  padding: 2px 6px !important;
+  margin: 0 8px 8px 0 !important;
 }
 
 .maplibregl-ctrl-attrib a {
-  color: #f5f6f8 !important;
+  color: #f8fafc !important;
 }

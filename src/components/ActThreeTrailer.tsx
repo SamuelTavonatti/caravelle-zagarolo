@@ -4,14 +4,14 @@ import { AnimatePresence, motion } from 'motion/react';
 import {
   ArrowLeft,
   FastForward,
-  Gauge,
-  MapPin,
+  Layers,
+  Navigation,
   Pause,
   Play,
   RotateCcw,
   Users,
 } from 'lucide-react';
-import { FULL_ROUTE_COORDINATES, ROUTE_LEGS, ROUTE_STOPS } from '../data/routeData';
+import { CONTINUOUS_LEGS, CONTINUOUS_ROUTE, ROUTE_STOPS } from '../data/routeData';
 import type { RouteStop } from '../types/roadtrip';
 
 interface ActThreeTrailerProps {
@@ -37,18 +37,16 @@ function buildTimeline(): { segments: TimelineSegment[]; totalDuration: number }
   const segments: TimelineSegment[] = [];
   let cursor = 0;
 
-  // Departure hold
   segments.push({
     kind: 'stop',
     stopIndex: 0,
     stop: ROUTE_STOPS[0],
     startTime: cursor,
-    endTime: (cursor += 1.6),
+    endTime: (cursor += 1.4),
   });
 
-  // Interleave each leg and its destination stop
-  for (let i = 0; i < ROUTE_LEGS.length; i++) {
-    const leg = ROUTE_LEGS[i];
+  for (let i = 0; i < CONTINUOUS_LEGS.length; i++) {
+    const leg = CONTINUOUS_LEGS[i];
     segments.push({
       kind: 'leg',
       legIndex: i,
@@ -57,7 +55,7 @@ function buildTimeline(): { segments: TimelineSegment[]; totalDuration: number }
     });
 
     const stop = ROUTE_STOPS[i + 1];
-    const holdDuration = stop.isHighwayEntry ? 2.4 : stop.isFinale ? 1.2 : 2.1;
+    const holdDuration = stop.isHighwayEntry ? 2.2 : stop.isFinale ? 1.1 : 1.9;
     segments.push({
       kind: 'stop',
       stopIndex: i + 1,
@@ -70,7 +68,7 @@ function buildTimeline(): { segments: TimelineSegment[]; totalDuration: number }
   return { segments, totalDuration: cursor };
 }
 
-function haversineDistance(a: [number, number], b: [number, number]): number {
+function haversineMeters(a: [number, number], b: [number, number]): number {
   const toRad = (deg: number) => (deg * Math.PI) / 180;
   const dLat = toRad(b[1] - a[1]);
   const dLng = toRad(b[0] - a[0]);
@@ -79,10 +77,10 @@ function haversineDistance(a: [number, number], b: [number, number]): number {
   const h =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * 6371 * Math.asin(Math.sqrt(h));
+  return 2 * 6371000 * Math.asin(Math.sqrt(h));
 }
 
-function computeBearing(from: [number, number], to: [number, number]): number {
+function computeBearingDeg(from: [number, number], to: [number, number]): number {
   const toRad = (d: number) => (d * Math.PI) / 180;
   const toDeg = (r: number) => (r * 180) / Math.PI;
   const lat1 = toRad(from[1]);
@@ -95,38 +93,71 @@ function computeBearing(from: [number, number], to: [number, number]): number {
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
 
-function interpolateBearing(current: number, target: number, factor: number): number {
-  let diff = ((target - current + 540) % 360) - 180;
-  return (current + diff * factor + 360) % 360;
+/**
+ * Shortest-angle interpolation with exponential low-pass damping (lerp = 0.06)
+ * and per-frame angular velocity clamp to guarantee ZERO 360° camera spins.
+ */
+function smoothBearingShortestArc(
+  currentBearing: number,
+  targetBearing: number,
+  lerpFactor = 0.06
+): number {
+  const shortestDelta = ((targetBearing - currentBearing + 540) % 360) - 180;
+  const step = Math.max(-3.5, Math.min(3.5, shortestDelta * lerpFactor));
+  return (currentBearing + step + 360) % 360;
 }
 
 function easeInOutSine(t: number): number {
   return -(Math.cos(Math.PI * t) - 1) / 2;
 }
 
-interface LegSample {
-  coord: [number, number];
-  bearing: number;
-  traveledCoords: [number, number][];
+interface RouteMetrics {
+  coords: [number, number][];
+  cumKm: number[];
+  totalKm: number;
 }
 
-function sampleLegAt(coords: [number, number][], fraction: number): LegSample {
-  if (coords.length < 2) {
-    return { coord: coords[0], bearing: 180, traveledCoords: coords };
-  }
-  const cumDist: number[] = [0];
+function precomputeRouteMetrics(coords: [number, number][]): RouteMetrics {
+  const cumKm: number[] = [0];
   for (let i = 1; i < coords.length; i++) {
-    cumDist.push(cumDist[i - 1] + haversineDistance(coords[i - 1], coords[i]));
+    cumKm.push(cumKm[i - 1] + haversineMeters(coords[i - 1], coords[i]) / 1000);
   }
-  const total = cumDist[cumDist.length - 1] || 1;
-  const targetDist = Math.max(0, Math.min(1, fraction)) * total;
+  return {
+    coords,
+    cumKm,
+    totalKm: cumKm[cumKm.length - 1] || 1,
+  };
+}
 
-  let idx = 0;
-  while (idx < cumDist.length - 2 && cumDist[idx + 1] < targetDist) {
-    idx++;
+function sampleContinuousRoute(
+  metrics: RouteMetrics,
+  distanceKm: number
+): {
+  coord: [number, number];
+  lookAheadCoord: [number, number];
+  traveledCoords: [number, number][];
+} {
+  const { coords, cumKm, totalKm } = metrics;
+  const targetKm = Math.max(0, Math.min(totalKm, distanceKm));
+
+  // Binary search for exact segment index along continuous polyline
+  let lo = 0;
+  let hi = cumKm.length - 2;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (cumKm[mid] <= targetKm && targetKm <= cumKm[mid + 1]) {
+      lo = mid;
+      break;
+    } else if (cumKm[mid] < targetKm) {
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
   }
-  const segLen = cumDist[idx + 1] - cumDist[idx] || 0.0001;
-  const localT = Math.max(0, Math.min(1, (targetDist - cumDist[idx]) / segLen));
+  const idx = Math.max(0, Math.min(coords.length - 2, lo));
+  const segKm = cumKm[idx + 1] - cumKm[idx] || 0.0001;
+  const localT = Math.max(0, Math.min(1, (targetKm - cumKm[idx]) / segKm));
+
   const p0 = coords[idx];
   const p1 = coords[idx + 1];
   const coord: [number, number] = [
@@ -134,47 +165,61 @@ function sampleLegAt(coords: [number, number][], fraction: number): LegSample {
     p0[1] + (p1[1] - p0[1]) * localT,
   ];
 
-  // Look slightly ahead for smoother camera bearing
-  const lookAheadIdx = Math.min(coords.length - 1, idx + 3);
-  const bearing = computeBearing(p0, coords[lookAheadIdx]);
+  // Look ahead at least 120m along the continuous road polyline for smooth, jitter-free heading
+  const lookAheadKm = Math.min(totalKm, targetKm + 0.18);
+  let laIdx = idx;
+  while (laIdx < cumKm.length - 2 && cumKm[laIdx + 1] < lookAheadKm) {
+    laIdx++;
+  }
+  const laSegKm = cumKm[laIdx + 1] - cumKm[laIdx] || 0.0001;
+  const laT = Math.max(0, Math.min(1, (lookAheadKm - cumKm[laIdx]) / laSegKm));
+  const lp0 = coords[laIdx];
+  const lp1 = coords[laIdx + 1];
+  const lookAheadCoord: [number, number] = [
+    lp0[0] + (lp1[0] - lp0[0]) * laT,
+    lp0[1] + (lp1[1] - lp0[1]) * laT,
+  ];
+
   const traveledCoords = [...coords.slice(0, idx + 1), coord];
-  return { coord, bearing, traveledCoords };
+  return { coord, lookAheadCoord, traveledCoords };
 }
 
-function createCaravelleMarkerElement(): HTMLDivElement {
+function createGoogleMapsCaravellePuck(): HTMLDivElement {
   const wrapper = document.createElement('div');
-  wrapper.className = 'caravelle-map-marker';
   wrapper.style.width = '46px';
-  wrapper.style.height = '76px';
+  wrapper.style.height = '46px';
   wrapper.style.display = 'flex';
   wrapper.style.alignItems = 'center';
   wrapper.style.justifyContent = 'center';
   wrapper.style.pointerEvents = 'none';
   wrapper.innerHTML = `
-    <svg viewBox="0 0 64 112" width="42" height="72" style="filter: drop-shadow(0 10px 14px rgba(0,0,0,0.55));">
-      <!-- Ground beacon ring -->
-      <ellipse cx="32" cy="58" rx="28" ry="48" fill="rgba(16,185,129,0.22)" />
-      <!-- Side mirrors -->
-      <rect x="4" y="29" width="7" height="12" rx="3" fill="#1E293B" />
-      <rect x="53" y="29" width="7" height="12" rx="3" fill="#1E293B" />
-      <!-- White 2008 VW Caravelle T5 Roof & Body -->
-      <rect x="10" y="6" width="44" height="100" rx="13" fill="#F8FAFC" stroke="#94A3B8" stroke-width="2" />
-      <!-- Front Hood & Headlight Glow -->
-      <path d="M 14 14 Q 32 7 50 14 L 50 22 Q 32 18 14 22 Z" fill="#E2E8F0" />
-      <rect x="14" y="8" width="9" height="4" rx="2" fill="#FEF08A" />
-      <rect x="41" y="8" width="9" height="4" rx="2" fill="#FEF08A" />
-      <!-- Front Sloped Windshield -->
-      <path d="M 14 23 Q 32 18 50 23 L 48 40 Q 32 37 16 40 Z" fill="#1E293B" />
-      <!-- Roof Panel Specular Center -->
-      <rect x="16" y="43" width="32" height="50" rx="5" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1" />
-      <!-- Rear Window -->
-      <rect x="16" y="95" width="32" height="7" rx="3" fill="#1E293B" />
-      <!-- Red Rear Tail Lights -->
-      <rect x="12" y="102" width="8" height="3" rx="1.5" fill="#EF4444" />
-      <rect x="44" y="102" width="8" height="3" rx="1.5" fill="#EF4444" />
+    <svg viewBox="0 0 64 64" width="44" height="44" style="filter: drop-shadow(0 6px 10px rgba(0,0,0,0.42));">
+      <!-- Outer Google Maps navigation puck -->
+      <circle cx="32" cy="32" r="24" fill="#FFFFFF" stroke="#1967D2" stroke-width="3" />
+      <!-- Crisp directional chevron pointing forward (up = 0 deg) -->
+      <path d="M 32 13 L 45 44 L 32 37 L 19 44 Z" fill="#4285F4" stroke="#1967D2" stroke-width="1.5" stroke-linejoin="miter" />
     </svg>
   `;
   return wrapper;
+}
+
+function formatEtaRemaining(remainingKm: number): string {
+  const totalMinutes = Math.max(0, Math.round((remainingKm / 105) * 60));
+  const hrs = Math.floor(totalMinutes / 60);
+  const mins = totalMinutes % 60;
+  if (hrs === 0) return `${mins} min`;
+  return `${hrs}h ${String(mins).padStart(2, '0')}m`;
+}
+
+declare global {
+  interface Window {
+    __CARAVELLE_NAV_TELEMETRY__?: {
+      maxBearingDelta: number;
+      currentBearing: number;
+      kmCovered: number;
+      samples: number;
+    };
+  }
 }
 
 export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
@@ -183,15 +228,18 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const mapReadyRef = useRef(false);
 
+  const routeMetrics = useMemo(
+    () => precomputeRouteMetrics(CONTINUOUS_ROUTE.coordinates),
+    []
+  );
   const { segments, totalDuration } = useMemo(() => buildTimeline(), []);
 
   const [isPlaying, setIsPlaying] = useState(true);
   const [speedMultiplier, setSpeedMultiplier] = useState<1 | 2>(1);
+  const [mapMode, setMapMode] = useState<'daylight' | 'hybrid'>('daylight');
   const [elapsedSec, setElapsedSec] = useState(0);
   const [isFinaleVisible, setIsFinaleVisible] = useState(false);
-  const [mapFallbackMode, setMapFallbackMode] = useState(false);
 
-  // Live telemetry state (throttled cleanly to React HUD)
   const [hudState, setHudState] = useState({
     activeStopIndex: 0,
     badge: ROUTE_STOPS[0].badge,
@@ -201,22 +249,51 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
     isHighwayBurst: false,
     kmCovered: 0,
     speedKmh: 0,
-    currentCoord: ROUTE_STOPS[0].coordinates as [number, number],
   });
 
   const elapsedRef = useRef(0);
   const isPlayingRef = useRef(true);
   const speedRef = useRef(1);
-  const smoothedBearingRef = useRef(185);
+  const initialHeading = useMemo(
+    () =>
+      computeBearingDeg(
+        CONTINUOUS_ROUTE.coordinates[0],
+        CONTINUOUS_ROUTE.coordinates[Math.min(4, CONTINUOUS_ROUTE.coordinates.length - 1)]
+      ),
+    []
+  );
+  const smoothedBearingRef = useRef(initialHeading);
+  const targetBearingRef = useRef(initialHeading);
+  const lastHeadingAnchorRef = useRef<[number, number]>(CONTINUOUS_ROUTE.coordinates[0]);
   const lastHudCommitRef = useRef(0);
 
   isPlayingRef.current = isPlaying;
   speedRef.current = speedMultiplier;
 
-  // Initialize MapLibre GL JS (OpenFreeMap Liberty 3D Vector Tiles — 100% FOSS)
+  // Toggle optional satellite hybrid underlay layer inside MapLibre
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReadyRef.current) return;
+    if (map.getLayer('hybrid-satellite-underlay')) {
+      map.setLayoutProperty(
+        'hybrid-satellite-underlay',
+        'visibility',
+        mapMode === 'hybrid' ? 'visible' : 'none'
+      );
+    }
+  }, [mapMode]);
+
+  // Initialize MapLibre GL JS with Google Maps Navigation Styling
   useEffect(() => {
     const container = mapContainerRef.current;
     if (!container) return;
+
+    window.__CARAVELLE_NAV_TELEMETRY__ = {
+      maxBearingDelta: 0,
+      currentBearing: initialHeading,
+      kmCovered: 0,
+      samples: 0,
+    };
 
     let map: maplibregl.Map | null = null;
     try {
@@ -224,40 +301,64 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
       map = new maplibregl.Map({
         container,
         style: 'https://tiles.openfreemap.org/styles/liberty',
-        center: ROUTE_STOPS[0].coordinates,
-        zoom: 16.4,
-        pitch: 62,
-        bearing: 185,
+        center: CONTINUOUS_ROUTE.coordinates[0],
+        zoom: 16.5,
+        pitch: 58,
+        bearing: initialHeading,
         interactive: false,
         attributionControl: { compact: true },
-        maxPitch: 75,
+        maxPitch: 70,
       });
 
       mapRef.current = map;
 
       map.on('error', () => {
-        // Keep map resilient if an individual tile times out
+        // Keep playback resilient if an individual remote tile times out
       });
 
       map.on('load', () => {
         if (!map) return;
         mapReadyRef.current = true;
 
-        // Add subtle Apple Maps-inspired daylight atmospheric sky
         try {
           map.setSky({
-            'sky-color': '#B8D4EC',
-            'sky-horizon-blend': 0.55,
-            'horizon-color': '#F3E5D0',
-            'horizon-fog-blend': 0.75,
-            'fog-color': '#E8EDF2',
-            'fog-ground-blend': 0.35,
+            'sky-color': '#DCE8F5',
+            'sky-horizon-blend': 0.5,
+            'horizon-color': '#F4F6F8',
+            'horizon-fog-blend': 0.7,
+            'fog-color': '#EEF1F4',
+            'fog-ground-blend': 0.25,
           });
         } catch {
-          // Sky unsupported in older WebGL context — ignore gracefully
+          // Ignore if WebGL sky unsupported
         }
 
-        // Full upcoming route ribbon
+        // Optional crisp daylight satellite hybrid raster source (Esri World Imagery free tiles, toggled on demand)
+        const firstRoadLayer = map
+          .getStyle()
+          .layers.find((l) => l.id.includes('road') || l.id.includes('highway'))?.id;
+
+        map.addSource('esri-satellite', {
+          type: 'raster',
+          tiles: [
+            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+          ],
+          tileSize: 256,
+          maxzoom: 18,
+        });
+
+        map.addLayer(
+          {
+            id: 'hybrid-satellite-underlay',
+            type: 'raster',
+            source: 'esri-satellite',
+            layout: { visibility: 'none' },
+            paint: { 'raster-opacity': 0.88 },
+          },
+          firstRoadLayer
+        );
+
+        // Full continuous OSRM route source
         map.addSource('full-route', {
           type: 'geojson',
           data: {
@@ -265,12 +366,12 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
             properties: {},
             geometry: {
               type: 'LineString',
-              coordinates: FULL_ROUTE_COORDINATES,
+              coordinates: CONTINUOUS_ROUTE.coordinates,
             },
           },
         });
 
-        // Traveled luminous route ribbon
+        // Traveled route progress source
         map.addSource('traveled-route', {
           type: 'geojson',
           data: {
@@ -278,111 +379,89 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
             properties: {},
             geometry: {
               type: 'LineString',
-              coordinates: [ROUTE_STOPS[0].coordinates, ROUTE_STOPS[0].coordinates],
+              coordinates: [CONTINUOUS_ROUTE.coordinates[0], CONTINUOUS_ROUTE.coordinates[0]],
             },
           },
         });
 
-        // Stop waypoint pins source
+        // Stop waypoint markers source
         map.addSource('route-stops', {
           type: 'geojson',
           data: {
             type: 'FeatureCollection',
             features: ROUTE_STOPS.map((s) => ({
               type: 'Feature',
-              properties: {
-                id: s.id,
-                title: s.badge,
-                isHighway: s.isHighwayEntry ? 1 : 0,
-              },
-              geometry: {
-                type: 'Point',
-                coordinates: s.coordinates,
-              },
+              properties: { id: s.id, title: s.badge },
+              geometry: { type: 'Point', coordinates: s.coordinates },
             })),
           },
         });
 
-        // Crisp white outer casing for upcoming Apple Maps navigation route
+        // Iconic Google Maps Route Casing (#1967D2)
         map.addLayer({
-          id: 'route-upcoming-casing',
+          id: 'gmaps-route-casing',
           type: 'line',
           source: 'full-route',
           layout: { 'line-join': 'round', 'line-cap': 'round' },
           paint: {
-            'line-color': '#FFFFFF',
+            'line-color': '#1967D2',
             'line-width': 11,
-            'line-opacity': 0.82,
+            'line-opacity': 0.92,
           },
         });
 
-        // Upcoming Apple Maps navigation cobalt track
+        // Iconic Google Maps Route Blue Core (#4285F4)
         map.addLayer({
-          id: 'route-upcoming-core',
+          id: 'gmaps-route-core',
           type: 'line',
           source: 'full-route',
           layout: { 'line-join': 'round', 'line-cap': 'round' },
           paint: {
-            'line-color': '#2563EB',
-            'line-width': 6.5,
-            'line-opacity': 0.78,
-          },
-        });
-
-        // Luminous emerald outer halo for active traveled ribbon
-        map.addLayer({
-          id: 'route-traveled-glow',
-          type: 'line',
-          source: 'traveled-route',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': '#10B981',
-            'line-width': 18,
-            'line-blur': 8,
-            'line-opacity': 0.56,
-          },
-        });
-
-        // Crisp luminous emerald core ribbon
-        map.addLayer({
-          id: 'route-traveled-core',
-          type: 'line',
-          source: 'traveled-route',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': '#10B981',
-            'line-width': 8,
+            'line-color': '#4285F4',
+            'line-width': 7,
             'line-opacity': 0.98,
           },
         });
 
-        // Stop waypoint circles
+        // Already-traveled muted slate-blue trail (classic Google Maps navigation behind vehicle)
         map.addLayer({
-          id: 'route-stops-circles',
-          type: 'circle',
-          source: 'route-stops',
+          id: 'gmaps-traveled-trail',
+          type: 'line',
+          source: 'traveled-route',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
           paint: {
-            'circle-radius': 7,
-            'circle-color': '#F8FAFC',
-            'circle-stroke-width': 3.5,
-            'circle-stroke-color': '#10B981',
+            'line-color': '#93C5FD',
+            'line-width': 7,
+            'line-opacity': 0.92,
           },
         });
 
-        // White 2008 VW Caravelle 3D Marker
-        const markerEl = createCaravelleMarkerElement();
+        // Waypoint pins (crisp white with Google Maps blue ring)
+        map.addLayer({
+          id: 'gmaps-stop-pins',
+          type: 'circle',
+          source: 'route-stops',
+          paint: {
+            'circle-radius': 6.5,
+            'circle-color': '#FFFFFF',
+            'circle-stroke-width': 3,
+            'circle-stroke-color': '#1967D2',
+          },
+        });
+
+        // Google Maps Navigation Puck
         const marker = new maplibregl.Marker({
-          element: markerEl,
+          element: createGoogleMapsCaravellePuck(),
           rotationAlignment: 'map',
           pitchAlignment: 'map',
         })
-          .setLngLat(ROUTE_STOPS[0].coordinates)
-          .setRotation(185)
+          .setLngLat(CONTINUOUS_ROUTE.coordinates[0])
+          .setRotation(initialHeading)
           .addTo(map);
         markerRef.current = marker;
       });
     } catch {
-      setMapFallbackMode(true);
+      // Resilient no-op if WebGL context unavailable
     }
 
     return () => {
@@ -394,46 +473,30 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
         mapRef.current = null;
       }
     };
-  }, []);
+  }, [initialHeading]);
 
-  // Precompute prefix coordinate arrays for fast traveled-route GeoJSON updates
-  const legPrefixCoords = useMemo(() => {
-    const prefixes: [number, number][][] = [];
-    let acc: [number, number][] = [];
-    for (let i = 0; i < ROUTE_LEGS.length; i++) {
-      prefixes.push([...acc]);
-      const pts = ROUTE_LEGS[i].coordinates;
-      acc = acc.length === 0 ? [...pts] : [...acc, ...pts.slice(1)];
-    }
-    prefixes.push(acc);
-    return prefixes;
-  }, []);
-
-  // Evaluate timeline frame at any timestamp t
+  // Frame-accurate continuous timeline evaluator (zero teleportation, zero 360° spins)
   const applyTimelineFrame = useCallback(
-    (t: number, forceHud = false) => {
+    (t: number, forceHud = false, isExplicitJump = false) => {
       const clampedT = Math.max(0, Math.min(totalDuration, t));
       const seg =
         segments.find((s) => clampedT >= s.startTime && clampedT <= s.endTime) ??
         segments[segments.length - 1];
 
-      let center: [number, number] = ROUTE_STOPS[0].coordinates;
-      let zoom = 16.4;
-      let pitch = 62;
-      let targetBearing = smoothedBearingRef.current;
-      let traveled: [number, number][] = [ROUTE_STOPS[0].coordinates, ROUTE_STOPS[0].coordinates];
+      let distanceKm = 0;
+      let zoom = 16.5;
+      let pitch = 58;
       let activeStopIndex = 0;
       let badge = ROUTE_STOPS[0].badge;
       let title = ROUTE_STOPS[0].title;
       let roadBadge = 'Via Cocciadoro 1, Trento';
       let overlayText: string | null = null;
       let isHighwayBurst = false;
-      let kmCovered = 0;
       let speedKmh = 0;
 
       if (seg.kind === 'stop') {
         const stop = seg.stop;
-        center = stop.coordinates;
+        distanceKm = stop.kmFromStart;
         zoom = stop.zoom;
         pitch = stop.pitch;
         activeStopIndex = seg.stopIndex;
@@ -442,84 +505,83 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
         roadBadge = stop.isHighwayEntry ? 'Casello Rovereto Sud · A22 → A1 → A14' : stop.subtitle;
         overlayText = stop.overlayText ?? null;
         isHighwayBurst = Boolean(stop.isHighwayEntry);
-        kmCovered = stop.kmFromStart;
 
         const segProgress =
           (clampedT - seg.startTime) / Math.max(0.01, seg.endTime - seg.startTime);
 
         if (stop.isHighwayEntry) {
-          // Dedicated speed-ramp & sweeping camera push on highway entry
-          speedKmh = Math.round(52 + segProgress * 78);
-          zoom = 14.2 - segProgress * 2.2;
-          pitch = 64;
-          targetBearing = 168 + segProgress * 14;
+          speedKmh = Math.round(54 + segProgress * 76);
+          zoom = 14.0 - segProgress * 1.8;
+          pitch = 62;
         } else {
           speedKmh = 0;
-          // Gentle Apple Maps orbiting breath at each pickup stop
-          targetBearing = smoothedBearingRef.current + 0.14;
         }
-
-        const prefixIdx = Math.min(seg.stopIndex, legPrefixCoords.length - 1);
-        traveled =
-          legPrefixCoords[prefixIdx].length >= 2
-            ? legPrefixCoords[prefixIdx]
-            : [stop.coordinates, stop.coordinates];
       } else {
-        const leg = ROUTE_LEGS[seg.legIndex];
+        const leg = CONTINUOUS_LEGS[seg.legIndex];
         const rawProgress =
           (clampedT - seg.startTime) / Math.max(0.01, seg.endTime - seg.startTime);
         const easedProgress = easeInOutSine(rawProgress);
 
-        const sampled = sampleLegAt(leg.coordinates, easedProgress);
-        center = sampled.coord;
-        targetBearing = sampled.bearing;
+        // Continuous meter-by-meter interpolation along single OSRM polyline
+        distanceKm = leg.startKm + (leg.endKm - leg.startKm) * easedProgress;
 
-        // Highway dynamic zoom & speed-ramp
         if (leg.isHighwaySegment && seg.legIndex >= 4) {
           const midArc = Math.sin(rawProgress * Math.PI);
-          zoom = leg.zoom + (1 - midArc) * 1.6;
-          pitch = 62;
-          speedKmh = Math.round(leg.cruiseKmh - 12 + midArc * 16);
-          isHighwayBurst = seg.legIndex === 4 && rawProgress < 0.28;
+          zoom = leg.zoom + (1 - midArc) * 1.4;
+          pitch = 60;
+          speedKmh = Math.round(leg.cruiseKmh - 10 + midArc * 14);
+          isHighwayBurst = seg.legIndex === 4 && rawProgress < 0.25;
         } else {
           zoom = leg.zoom;
           pitch = leg.pitch;
-          speedKmh = Math.round(leg.cruiseKmh * (0.72 + 0.28 * Math.sin(rawProgress * Math.PI)));
+          speedKmh = Math.round(leg.cruiseKmh * (0.74 + 0.26 * Math.sin(rawProgress * Math.PI)));
         }
 
         activeStopIndex = seg.legIndex;
         badge = leg.label;
         title = ROUTE_STOPS[seg.legIndex + 1].title;
         roadBadge = leg.roadBadge;
-
-        const prevKm = ROUTE_STOPS[seg.legIndex].kmFromStart;
-        const nextKm = ROUTE_STOPS[seg.legIndex + 1].kmFromStart;
-        kmCovered = prevKm + (nextKm - prevKm) * easedProgress;
-
-        const prefix = legPrefixCoords[seg.legIndex];
-        traveled =
-          prefix.length > 0
-            ? [...prefix, ...sampled.traveledCoords.slice(1)]
-            : sampled.traveledCoords;
       }
 
-      smoothedBearingRef.current = interpolateBearing(
-        smoothedBearingRef.current,
-        targetBearing,
-        0.09
-      );
+      const sampled = sampleContinuousRoute(routeMetrics, distanceKm);
 
-      // Update MapLibre 3D camera, route ribbon, and Caravelle marker at 60fps
+      // Update heading ONLY if we moved > 25m from last heading anchor (eliminates micro-kink 360° jitter)
+      const movedMeters = haversineMeters(lastHeadingAnchorRef.current, sampled.coord);
+      const lookAheadMeters = haversineMeters(sampled.coord, sampled.lookAheadCoord);
+      if ((movedMeters > 25 || isExplicitJump) && lookAheadMeters > 25) {
+        targetBearingRef.current = computeBearingDeg(sampled.coord, sampled.lookAheadCoord);
+        lastHeadingAnchorRef.current = sampled.coord;
+      }
+
+      const prevBearing = smoothedBearingRef.current;
+      const nextBearing = isExplicitJump
+        ? targetBearingRef.current
+        : smoothBearingShortestArc(prevBearing, targetBearingRef.current, 0.06);
+
+      smoothedBearingRef.current = nextBearing;
+
+      // Record bearing stability telemetry for QA verification
+      if (!isExplicitJump && window.__CARAVELLE_NAV_TELEMETRY__) {
+        const frameDelta = Math.abs(((nextBearing - prevBearing + 540) % 360) - 180);
+        window.__CARAVELLE_NAV_TELEMETRY__.maxBearingDelta = Math.max(
+          window.__CARAVELLE_NAV_TELEMETRY__.maxBearingDelta,
+          frameDelta
+        );
+        window.__CARAVELLE_NAV_TELEMETRY__.currentBearing = nextBearing;
+        window.__CARAVELLE_NAV_TELEMETRY__.kmCovered = distanceKm;
+        window.__CARAVELLE_NAV_TELEMETRY__.samples += 1;
+      }
+
       const map = mapRef.current;
       if (map && mapReadyRef.current) {
         map.jumpTo({
-          center,
+          center: sampled.coord,
           zoom,
           pitch,
-          bearing: smoothedBearingRef.current,
+          bearing: nextBearing,
         });
 
-        markerRef.current?.setLngLat(center).setRotation(smoothedBearingRef.current);
+        markerRef.current?.setLngLat(sampled.coord).setRotation(nextBearing);
 
         const traveledSource = map.getSource('traveled-route') as maplibregl.GeoJSONSource | undefined;
         if (traveledSource) {
@@ -528,7 +590,7 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
             properties: {},
             geometry: {
               type: 'LineString',
-              coordinates: traveled,
+              coordinates: sampled.traveledCoords,
             },
           });
         }
@@ -545,9 +607,8 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
           roadBadge,
           overlayText,
           isHighwayBurst,
-          kmCovered: Math.round(kmCovered),
+          kmCovered: Math.round(distanceKm),
           speedKmh,
-          currentCoord: center,
         });
       }
 
@@ -556,10 +617,10 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
         setIsFinaleVisible(true);
       }
     },
-    [legPrefixCoords, segments, totalDuration]
+    [routeMetrics, segments, totalDuration]
   );
 
-  // 60/120 FPS requestAnimationFrame trailer loop
+  // Smooth 60/120fps RAF loop
   useEffect(() => {
     let rafId = 0;
     let lastTs = performance.now();
@@ -583,7 +644,7 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
   const handleReplay = () => {
     setIsFinaleVisible(false);
     elapsedRef.current = 0;
-    applyTimelineFrame(0, true);
+    applyTimelineFrame(0, true, true);
     setIsPlaying(true);
   };
 
@@ -592,7 +653,7 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
     if (!targetSeg) return;
     setIsFinaleVisible(false);
     elapsedRef.current = targetSeg.startTime + 0.05;
-    applyTimelineFrame(elapsedRef.current, true);
+    applyTimelineFrame(elapsedRef.current, true, true);
     if (stopIdx === ROUTE_STOPS.length - 1) {
       setIsPlaying(false);
       setIsFinaleVisible(true);
@@ -601,94 +662,62 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
     }
   };
 
+  const totalKmDisplay = Math.round(routeMetrics.totalKm);
+  const remainingKm = Math.max(0, totalKmDisplay - hudState.kmCovered);
   const progressPct = Math.min(100, (elapsedSec / totalDuration) * 100);
 
   return (
     <section
-      aria-label="Trailer 3D del percorso Trento Zagarolo"
+      aria-label="Navigazione 3D Trento Zagarolo"
       data-testid="act-three-trailer"
-      className="relative h-[100dvh] w-full overflow-hidden bg-[#0A0D12] select-none"
+      className="relative h-[100dvh] w-full overflow-hidden bg-[#E5E7EB] select-none"
     >
-      {/* Full-Viewport 3D MapLibre Canvas */}
-      <div
-        ref={mapContainerRef}
-        className="absolute inset-0 h-full w-full"
-        aria-hidden="true"
-      />
+      {/* Full-Viewport MapLibre GL JS Canvas */}
+      <div ref={mapContainerRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
 
-      {/* Resilient High-Craft SVG Fallback if WebGL is unavailable */}
-      {mapFallbackMode && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#0F1722]">
-          <svg viewBox="0 0 800 900" className="h-full w-full max-w-3xl opacity-85" aria-hidden="true">
-            <path
-              d="M 290 120 Q 250 220 220 260 Q 270 300 350 430 Q 450 530 510 560 Q 560 680 580 790"
-              fill="none"
-              stroke="#10B981"
-              strokeWidth="8"
-              strokeLinecap="round"
-            />
-          </svg>
-        </div>
-      )}
-
-      {/* Subtle Apple Maps-style Top & Bottom Readability Gradients */}
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 z-10 h-32 bg-gradient-to-b from-[#090B0E]/75 via-[#090B0E]/25 to-transparent"
-        aria-hidden="true"
-      />
-      <div
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-44 bg-gradient-to-t from-[#090B0E]/90 via-[#090B0E]/40 to-transparent"
-        aria-hidden="true"
-      />
-
-      {/* TOP APPLE MAPS NAVIGATION HUD */}
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 px-4 pt-4 sm:px-6 sm:pt-5">
-        <div className="mx-auto flex max-w-6xl items-start justify-between gap-3">
-          {/* Active Navigation Banner */}
-          <div className="pointer-events-auto glass-dark flex items-center gap-3.5 rounded-[20px] px-4 py-3 text-[#F5F6F8] max-w-[74%] sm:max-w-md">
-            <div
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                hudState.isHighwayBurst
-                  ? 'bg-[#10B981] text-[#042419]'
-                  : 'bg-[#10B981]/18 text-[#34D399]'
-              }`}
-            >
-              {hudState.isHighwayBurst ? (
-                <Gauge className="h-5 w-5" aria-hidden="true" />
-              ) : (
-                <MapPin className="h-5 w-5" aria-hidden="true" />
-              )}
+      {/* TOP GOOGLE MAPS NAVIGATION TURN/STOP TELEMETRY BANNER (Dark-Bordered Architectural Bar) */}
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 p-3 sm:p-5">
+        <div className="mx-auto flex max-w-6xl items-start justify-between gap-2.5">
+          {/* Classic Google Maps Navigation Direction Banner */}
+          <div className="pointer-events-auto flex min-w-0 max-w-[72%] items-stretch overflow-hidden rounded-[4px] border border-black/40 bg-[#0F5338] text-[#F8FAFC] shadow-[0_8px_24px_rgba(0,0,0,0.35)] sm:max-w-lg">
+            <div className="flex w-12 shrink-0 flex-col items-center justify-center border-r border-white/15 bg-[#0A3D29] px-2">
+              <Navigation className="h-5 w-5 text-[#F8FAFC]" aria-hidden="true" />
+              <span className="mt-1 font-mono-telemetry text-[10px] font-bold text-[#A7F3D0]">
+                {hudState.speedKmh}
+              </span>
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="truncate text-xs font-bold tracking-tight text-[#34D399]">
-                  {hudState.badge}
-                </span>
-                <span className="font-mono-telemetry text-[11px] text-[#C7D0DC] shrink-0">
-                  {hudState.kmCovered} / 738 km
-                </span>
+            <div className="min-w-0 px-3.5 py-2.5">
+              <div className="flex items-center gap-2 font-mono-telemetry text-[11px] font-semibold tracking-[0.05em] text-[#A7F3D0]">
+                <span className="truncate">{hudState.badge}</span>
+                <span aria-hidden="true">·</span>
+                <span className="shrink-0">{hudState.roadBadge}</span>
               </div>
-              <p className="truncate text-sm font-bold text-[#F5F6F8] sm:text-base">
+              <p className="mt-0.5 truncate text-sm font-extrabold tracking-tight text-[#FFFFFF] sm:text-base">
                 {hudState.title}
               </p>
-              <p className="truncate text-xs text-[#A4AEBC]">{hudState.roadBadge}</p>
             </div>
           </div>
 
-          {/* Right: Speedometer + Return to Cabin Button */}
-          <div className="pointer-events-auto flex items-center gap-2">
-            <div className="glass-dark hidden items-center gap-2 rounded-full px-3.5 py-2 sm:inline-flex">
-              <span className="font-mono-telemetry text-sm font-bold text-[#F5F6F8]">
-                {hudState.speedKmh}
+          {/* Right: Map Layer Toggle (Daylight / Hybrid) + Return to Cabin */}
+          <div className="pointer-events-auto flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setMapMode((m) => (m === 'daylight' ? 'hybrid' : 'daylight'))}
+              data-testid="toggle-map-mode-btn"
+              aria-label="Cambia vista mappa tra stradale e satellitare ibrida"
+              className="tactile-btn inline-flex min-h-[44px] items-center gap-1.5 rounded-[4px] border border-white/15 bg-[#09090B]/92 px-3 py-2 text-xs font-semibold text-[#F8FAFC] hover:bg-[#18181B]"
+            >
+              <Layers className="h-4 w-4 text-[#4285F4]" aria-hidden="true" />
+              <span className="hidden sm:inline">
+                {mapMode === 'daylight' ? 'Satellite' : 'Mappa'}
               </span>
-              <span className="text-[11px] font-medium text-[#A4AEBC]">km/h</span>
-            </div>
+            </button>
 
             <button
               type="button"
               onClick={onBackToCabin}
               data-testid="trailer-back-cabin-btn"
-              className="tactile-btn glass-dark inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold text-[#F5F6F8] hover:bg-white/15 sm:text-sm"
+              className="tactile-btn inline-flex min-h-[44px] items-center gap-1.5 rounded-[4px] border border-white/15 bg-[#09090B]/92 px-3.5 py-2 text-xs font-semibold text-[#F8FAFC] hover:bg-[#18181B]"
             >
               <Users className="h-4 w-4 text-[#10B981]" aria-hidden="true" />
               <span>Cabina</span>
@@ -697,46 +726,44 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
         </div>
       </header>
 
-      {/* CENTER CINEMATIC PICKUP & HIGHWAY ENTRY OVERLAYS */}
+      {/* CENTER PICKUP & HIGHWAY ENTRY TELEMETRY OVERLAY */}
       <div className="pointer-events-none absolute inset-x-0 top-1/2 z-20 flex -translate-y-1/2 justify-center px-4">
         <AnimatePresence mode="wait">
           {!isFinaleVisible && hudState.overlayText && (
             <motion.div
               key={hudState.overlayText}
               data-testid="trailer-stop-overlay"
-              initial={{ opacity: 0, y: 18, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.96, transition: { duration: 0.16 } }}
-              transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
-              className={`rounded-[24px] px-6 py-4 text-center shadow-[0_24px_60px_-12px_rgba(0,0,0,0.75)] backdrop-blur-xl ${
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10, transition: { duration: 0.14 } }}
+              transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
+              className={`rounded-[4px] border px-6 py-4 text-center shadow-[0_18px_40px_rgba(0,0,0,0.45)] ${
                 hudState.isHighwayBurst
-                  ? 'border border-[#10B981]/55 bg-[#063826]/88 text-[#ECFDF5]'
-                  : 'glass-dark text-[#F5F6F8]'
+                  ? 'border-[#10B981] bg-[#0F5338] text-[#FFFFFF]'
+                  : 'border-white/20 bg-[#09090B]/94 text-[#F8FAFC]'
               }`}
             >
               {hudState.isHighwayBurst ? (
-                <div className="space-y-1.5">
-                  <div className="inline-flex items-center gap-2 rounded-full bg-[#10B981] px-3 py-0.5 font-mono-telemetry text-[11px] font-bold uppercase tracking-wider text-[#042419]">
-                    <span>Casello Rovereto Sud</span>
-                    <span>·</span>
-                    <span>{hudState.speedKmh} km/h</span>
+                <div className="space-y-1">
+                  <div className="font-mono-telemetry text-[11px] font-bold uppercase tracking-[0.08em] text-[#A7F3D0]">
+                    CASELLO ROVERETO SUD · {hudState.speedKmh} KM/H
                   </div>
-                  <p className="text-xl font-extrabold tracking-tight sm:text-3xl">
+                  <p className="text-xl font-extrabold tracking-[-0.025em] sm:text-3xl">
                     Ingresso in Autostrada
                   </p>
-                  <p className="font-mono-telemetry text-xs font-semibold text-[#A7F3D0] sm:text-sm">
-                    A22 Brennero → A1 → A14 Adriatica
+                  <p className="font-mono-telemetry text-xs text-[#D1FAE5]">
+                    A22 BRENNERO → A1 → A14 ADRIATICA
                   </p>
                 </div>
               ) : (
                 <div className="space-y-1">
-                  <span className="font-mono-telemetry text-xs font-semibold uppercase tracking-wider text-[#34D399]">
+                  <span className="font-mono-telemetry text-[11px] font-bold uppercase tracking-[0.08em] text-[#4285F4]">
                     {hudState.badge}
                   </span>
-                  <p className="text-2xl font-extrabold tracking-tight text-[#F5F6F8] sm:text-4xl">
+                  <p className="text-2xl font-extrabold tracking-[-0.03em] text-[#F8FAFC] sm:text-4xl">
                     {hudState.overlayText}
                   </p>
-                  <p className="text-xs text-[#C7D0DC] sm:text-sm">{hudState.title}</p>
+                  <p className="text-xs text-[#A1A1AA] sm:text-sm">{hudState.title}</p>
                 </div>
               )}
             </motion.div>
@@ -744,48 +771,70 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
         </AnimatePresence>
       </div>
 
-      {/* BOTTOM PLAYBACK BAR & INTERACTIVE STOP TIMELINE */}
+      {/* BOTTOM GOOGLE MAPS DISTANCE / ETA PROGRESS BAR & STOP STEPPER */}
       {!isFinaleVisible && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-5 sm:px-6 sm:pb-6">
-          <div className="pointer-events-auto glass-dark mx-auto max-w-4xl rounded-[22px] p-3.5 sm:p-4">
-            {/* Progress Track */}
-            <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-white/12">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 p-3 sm:p-5">
+          <div className="pointer-events-auto mx-auto max-w-5xl overflow-hidden rounded-[4px] border border-white/15 bg-[#09090B]/94 text-[#F8FAFC] shadow-[0_14px_34px_rgba(0,0,0,0.45)]">
+            {/* Google Maps Blue Progress Track */}
+            <div className="h-1 w-full bg-white/12">
               <div
-                className="h-full rounded-full bg-[#10B981] transition-[width] duration-100 ease-linear"
+                className="h-full bg-[#4285F4] transition-[width] duration-100 ease-linear"
                 style={{ width: `${progressPct}%` }}
               />
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              {/* Playback Controls */}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsPlaying((p) => !p)}
-                  aria-label={isPlaying ? 'Metti in pausa trailer' : 'Riprendi trailer'}
-                  data-testid="trailer-play-pause-btn"
-                  className="tactile-btn inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#10B981] text-[#042419] hover:bg-[#34D399]"
-                >
-                  {isPlaying ? (
-                    <Pause className="h-4 w-4 fill-current" aria-hidden="true" />
-                  ) : (
-                    <Play className="h-4 w-4 fill-current" aria-hidden="true" />
-                  )}
-                </button>
+            <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-3">
+              {/* Left: Controls + Tabular Distance / ETA */}
+              <div className="flex items-center justify-between gap-3 sm:justify-start">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsPlaying((p) => !p)}
+                    aria-label={isPlaying ? 'Metti in pausa trailer' : 'Riprendi trailer'}
+                    data-testid="trailer-play-pause-btn"
+                    className="tactile-btn inline-flex h-11 w-11 items-center justify-center rounded-[4px] bg-[#4285F4] text-[#FFFFFF] hover:bg-[#3B82F6]"
+                  >
+                    {isPlaying ? (
+                      <Pause className="h-4 w-4 fill-current" aria-hidden="true" />
+                    ) : (
+                      <Play className="h-4 w-4 fill-current" aria-hidden="true" />
+                    )}
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setSpeedMultiplier((s) => (s === 1 ? 2 : 1))}
-                  data-testid="trailer-speed-btn"
-                  className="tactile-btn inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-white/12 bg-white/6 px-3.5 py-2 font-mono-telemetry text-xs font-semibold text-[#F5F6F8] hover:bg-white/12"
-                >
-                  <FastForward className="h-3.5 w-3.5 text-[#E5B769]" aria-hidden="true" />
-                  <span>{speedMultiplier}x</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setSpeedMultiplier((s) => (s === 1 ? 2 : 1))}
+                    data-testid="trailer-speed-btn"
+                    className="tactile-btn inline-flex min-h-[44px] items-center gap-1.5 rounded-[4px] border border-white/15 bg-[#141418] px-3 py-2 font-mono-telemetry text-xs font-bold text-[#F8FAFC] hover:border-white/30"
+                  >
+                    <FastForward className="h-3.5 w-3.5 text-[#A1A1AA]" aria-hidden="true" />
+                    <span>{speedMultiplier}X</span>
+                  </button>
+                </div>
+
+                {/* Google Maps Style Tabular ETA & Remaining Distance */}
+                <div className="flex items-center gap-3 border-l border-white/12 pl-3 font-mono-telemetry text-xs">
+                  <div>
+                    <div className="text-sm font-bold text-[#10B981]">
+                      {formatEtaRemaining(remainingKm)}
+                    </div>
+                    <div className="text-[10px] uppercase tracking-[0.05em] text-[#A1A1AA]">
+                      {remainingKm} KM RESTANTI
+                    </div>
+                  </div>
+                  <div className="hidden border-l border-white/12 pl-3 sm:block">
+                    <div className="text-sm font-bold text-[#F8FAFC]">
+                      {hudState.kmCovered} / {totalKmDisplay} KM
+                    </div>
+                    <div className="text-[10px] uppercase tracking-[0.05em] text-[#A1A1AA]">
+                      PERCORSI
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* Direct Stop Stepper Pills */}
-              <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+              {/* Right: Sharp Stop Stepper */}
+              <div className="flex items-center gap-1 overflow-x-auto">
                 {ROUTE_STOPS.map((stop, idx) => {
                   const isCurrent = hudState.activeStopIndex === idx;
                   const shortName =
@@ -808,10 +857,10 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
                       type="button"
                       onClick={() => handleJumpToStop(idx)}
                       data-testid={`jump-stop-${stop.id}`}
-                      className={`tactile-btn min-h-[36px] shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                      className={`tactile-btn min-h-[36px] shrink-0 rounded-[2px] border px-2.5 py-1 font-mono-telemetry text-[11px] font-semibold uppercase ${
                         isCurrent
-                          ? 'bg-[#10B981] text-[#042419]'
-                          : 'bg-white/6 text-[#C7D0DC] hover:bg-white/14 hover:text-[#F5F6F8]'
+                          ? 'border-[#4285F4] bg-[#4285F4] text-[#FFFFFF]'
+                          : 'border-white/12 bg-[#141418] text-[#D4D4D8] hover:border-white/30 hover:text-[#F8FAFC]'
                       }`}
                     >
                       {shortName}
@@ -832,34 +881,34 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.65, ease: [0.23, 1, 0.32, 1] }}
-            className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-[#050507]/90 px-6 text-center backdrop-blur-xl"
+            transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
+            className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-[#050507]/94 px-6 text-center backdrop-blur-md"
           >
             <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.55, delay: 0.12, ease: [0.23, 1, 0.32, 1] }}
-              className="max-w-3xl"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, delay: 0.1, ease: [0.23, 1, 0.32, 1] }}
+              className="max-w-3xl border-y border-white/12 py-10"
             >
-              <p className="font-mono-telemetry text-xs font-semibold uppercase tracking-[0.18em] text-[#E5B769] sm:text-sm">
-                Zagarolo (RM) · 738 km completati
+              <p className="font-mono-telemetry text-xs font-semibold uppercase tracking-[0.16em] text-[#10B981]">
+                ZAGAROLO (RM) · {totalKmDisplay} KM COMPLETATI
               </p>
 
-              <h1 className="mt-4 text-[42px] leading-[1.02] font-extrabold tracking-[-0.03em] text-[#F5F6F8] sm:text-[72px]">
+              <h1 className="mt-4 text-[42px] leading-[1.02] font-extrabold tracking-[-0.035em] text-[#F8FAFC] sm:text-[72px]">
                 Ben arrivati a&nbsp;Roma
               </h1>
 
-              <p className="mx-auto mt-4 max-w-xl text-base text-[#C7D0DC] sm:text-lg">
-                Tutti a bordo del Caravelle T5: da Via Cocciadoro a Trento fino a Zagarolo,
-                passando per Torre Vanga, Pomarolo, Riva del Garda e&nbsp;Cesena.
+              <p className="mx-auto mt-4 max-w-xl text-sm text-[#A1A1AA] sm:text-base">
+                Da Via Cocciadoro 1 a Trento fino a Zagarolo, passando per Torre Vanga,
+                Pomarolo, Riva del Garda e&nbsp;Cesena.
               </p>
 
-              <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <button
                   type="button"
                   onClick={handleReplay}
                   data-testid="replay-trailer-btn"
-                  className="tactile-btn tactile-lift inline-flex min-h-[52px] w-full items-center justify-center gap-2.5 rounded-full bg-[#10B981] px-7 py-3.5 text-base font-bold text-[#042419] hover:bg-[#34D399] sm:w-auto"
+                  className="tactile-btn inline-flex min-h-[50px] w-full items-center justify-center gap-2.5 rounded-[4px] bg-[#10B981] px-7 py-3 text-sm font-bold text-[#042419] hover:bg-[#34D399] sm:w-auto sm:text-base"
                 >
                   <RotateCcw className="h-4 w-4" aria-hidden="true" />
                   <span>Rivedi trailer</span>
@@ -869,7 +918,7 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
                   type="button"
                   onClick={onBackToCabin}
                   data-testid="finale-back-cabin-btn"
-                  className="tactile-btn inline-flex min-h-[52px] w-full items-center justify-center gap-2.5 rounded-full border border-white/15 bg-white/8 px-7 py-3.5 text-base font-semibold text-[#F5F6F8] hover:bg-white/14 sm:w-auto"
+                  className="tactile-btn inline-flex min-h-[50px] w-full items-center justify-center gap-2.5 rounded-[4px] border border-white/15 bg-[#111114] px-7 py-3 text-sm font-semibold text-[#F8FAFC] hover:border-white/30 sm:w-auto sm:text-base"
                 >
                   <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                   <span>Torna alla cabina</span>

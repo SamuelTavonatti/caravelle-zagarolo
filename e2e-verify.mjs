@@ -44,20 +44,39 @@ async function runFlowForViewport(browser, vp) {
   await page.goto(URL, { waitUntil: 'networkidle', timeout: 30000 });
   await page.waitForTimeout(350);
 
-  // Verify Act I strict 100dvh and zero overflow
-  const act1Check = await page.evaluate(() => ({
-    overflowX: Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
-    heightDelta: document.documentElement.scrollHeight - window.innerHeight,
-  }));
+  // Verify Act I strict 100dvh, zero overflow, and real caravelle-side.jpg loaded
+  const act1Check = await page.evaluate(() => {
+    const img = document.querySelector('img[src*="caravelle-side.jpg"]');
+    return {
+      overflowX: Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
+      heightDelta: document.documentElement.scrollHeight - window.innerHeight,
+      photoLoaded: Boolean(img && img.complete && img.naturalWidth > 0),
+    };
+  });
   if (act1Check.overflowX > 0) {
     throw new Error(`[${vp.name}] Act I horizontal overflow: ${act1Check.overflowX}px`);
+  }
+  if (!act1Check.photoLoaded) {
+    throw new Error(`[${vp.name}] Real photograph caravelle-side.jpg failed to load!`);
   }
   await page.screenshot({ path: path.join(outDir, `${vp.name}-01-act1-exterior.png`) });
 
   // 1. Click primary door-opening CTA ("Apri il portellone") and wait for door slide + zoom -> Act II cabin
   await page.getByTestId('open-door-cta').click();
   await page.getByTestId('act-two-cabin').waitFor({ state: 'visible', timeout: 6000 });
-  await page.waitForTimeout(550);
+  await page.waitForTimeout(450);
+
+  // Verify Sketchfab "Modello 3D" toggle opens & closes cleanly
+  await page.getByTestId('toggle-3d-model-btn').click();
+  await page.getByTestId('sketchfab-3d-panel').waitFor({ state: 'visible', timeout: 3000 });
+  const hasSketchfab = await page
+    .locator('iframe[src*="sketchfab.com/models/ee2e1e8000db4deabaf59bae97eddecf"]')
+    .count();
+  if (hasSketchfab === 0) {
+    throw new Error(`[${vp.name}] Sketchfab 3D iframe missing!`);
+  }
+  await page.getByTestId('toggle-3d-model-btn').click();
+  await page.waitForTimeout(250);
 
   // Verify 8 passenger seats + locked driver seat are present
   const seatIds = ['F1', 'F2', 'M1', 'M2', 'M3', 'R1', 'R2', 'R3'];
@@ -122,10 +141,10 @@ async function runFlowForViewport(browser, vp) {
 
   // Wait for cinematic black curtain (#050507)
   await page.getByTestId('black-curtain').waitFor({ state: 'visible', timeout: 5000 });
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(350);
   await page.screenshot({ path: path.join(outDir, `${vp.name}-05-black-curtain.png`) });
 
-  // 4. Launch Apple Maps 3D Trailer -> watch playback and jump/verify all stops + finale "Ben arrivati a Roma"
+  // 4. Launch Google Maps Style 3D Trailer -> watch continuous playback and verify zero 360° spins
   await page.getByTestId('launch-trailer-btn').click();
   await page.getByTestId('act-three-trailer').waitFor({ state: 'visible', timeout: 8000 });
   await page.waitForTimeout(3200);
@@ -156,6 +175,10 @@ async function runFlowForViewport(browser, vp) {
 
   // Wait for trailer to reach Zagarolo and render the monumental "Ben arrivati a Roma" end card
   await page.getByTestId('finale-end-card').waitFor({ state: 'visible', timeout: 14000 });
+  const navTelemetry = await page.evaluate(() => window.__CARAVELLE_NAV_TELEMETRY__);
+  if (!navTelemetry || navTelemetry.maxBearingDelta > 10) {
+    throw new Error(`[${vp.name}] Unstable camera bearing detected: ${JSON.stringify(navTelemetry)}`);
+  }
   const finaleText = await page.getByTestId('finale-end-card').textContent();
   if (!finaleText?.includes('Ben arrivati a') || !finaleText?.includes('Roma')) {
     throw new Error(`[${vp.name}] Finale card missing "Ben arrivati a Roma": ${finaleText}`);
