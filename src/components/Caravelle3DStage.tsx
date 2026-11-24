@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 interface Caravelle3DStageProps {
   doorPhase: 'closed' | 'sliding' | 'overhead';
@@ -187,11 +186,12 @@ function buildStudioCaravelleT5(): {
   // =========================================================================
   // Refined metallic-pearl studio white (calibrated so curved studio bevels show rich tonal depth)
   const whitePaint = new THREE.MeshPhysicalMaterial({
-    color: 0xe6ebf2,
-    roughness: 0.2,
-    metalness: 0.12,
+    color: 0xf4f6f9,
+    roughness: 0.24,
+    metalness: 0.08,
     clearcoat: 1.0,
-    clearcoatRoughness: 0.06,
+    clearcoatRoughness: 0.08,
+    envMapIntensity: 1.4,
   });
 
   // Crisp swage crease & sill accent paint
@@ -204,8 +204,8 @@ function buildStudioCaravelleT5(): {
 
   // Sculpted dark matte-charcoal bumpers (#1E2025)
   const matteCharcoalBumper = new THREE.MeshPhysicalMaterial({
-    color: 0x1e2025,
-    roughness: 0.66,
+    color: 0x1b1d22,
+    roughness: 0.65,
     metalness: 0.08,
     clearcoat: 0.1,
   });
@@ -225,13 +225,14 @@ function buildStudioCaravelleT5(): {
 
   // Glossy azure-tinted automotive glass (#2B6CB0 + #0EA5E9 emissive sheen, clearcoat 1.0)
   const azureGlass = new THREE.MeshPhysicalMaterial({
-    color: 0x2b6cb0,
+    color: 0x1b4965,
     emissive: 0x0ea5e9,
-    emissiveIntensity: 0.12,
-    roughness: 0.06,
+    emissiveIntensity: 0.14,
+    roughness: 0.04,
     metalness: 0.24,
+    reflectivity: 1.0,
     transparent: true,
-    opacity: 0.84,
+    opacity: 0.86,
     clearcoat: 1.0,
     clearcoatRoughness: 0.04,
   });
@@ -873,6 +874,31 @@ function buildStudioCaravelleT5(): {
   return { vanGroup, slidingDoorGroup, doorHitTargets, doorHandleHighlightMat, cabinLight };
 }
 
+// Custom automotive studio HDRI: overhead softbox strips, side cards, cyan-azure floor bounce
+function createStudioEnvScene(): THREE.Scene {
+  const env = new THREE.Scene();
+  env.background = new THREE.Color(0x0b0d12);
+  const add = (w: number, h: number, c: number, i: number, pos: [number, number, number], rot: [number, number, number]) => {
+    const m = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, h),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(i), side: THREE.DoubleSide })
+    );
+    m.position.set(...pos);
+    m.rotation.set(...rot);
+    env.add(m);
+  };
+  const down: [number, number, number] = [Math.PI / 2, 0, 0];
+  add(14, 1.1, 0xffffff, 9, [0, 9, -2.5], down);
+  add(14, 1.1, 0xffffff, 9, [0, 9, 2.5], down);
+  add(14, 0.5, 0xffffff, 12, [0, 9, 0], down);
+  add(1.4, 8, 0xffffff, 4, [-11, 4, 0], [0, Math.PI / 2, 0]);
+  add(1.4, 8, 0xffffff, 4, [11, 4, 0], [0, Math.PI / 2, 0]);
+  add(20, 4, 0xdfe8f5, 1.2, [0, 3, -10], [0, 0, 0]);
+  add(20, 4, 0xdfe8f5, 1.0, [0, 3, 10], [0, Math.PI, 0]);
+  add(24, 24, 0x0ea5e9, 0.9, [0, -3, 0], [Math.PI / 2, 0, 0]);
+  return env;
+}
+
 export function Caravelle3DStage({
   doorPhase,
   onDoorClick,
@@ -905,7 +931,7 @@ export function Caravelle3DStage({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.96;
+    renderer.toneMappingExposure = 1.15;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
@@ -916,18 +942,18 @@ export function Caravelle3DStage({
     scene.fog = new THREE.Fog(0x09090b, 16, 40);
 
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
-    const envTex = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+    const envTex = pmremGenerator.fromScene(createStudioEnvScene(), 0.04).texture;
     scene.environment = envTex;
 
     const camera = new THREE.PerspectiveCamera(
-      34,
+      28,
       container.clientWidth / Math.max(1, container.clientHeight),
       0.1,
       80
     );
 
     const getIdleCameraDistance = (aspect: number) => {
-      return aspect < 1 ? Math.min(22.0, 9.8 / Math.max(0.42, aspect)) : 8.65;
+      return aspect < 1 ? Math.min(27.0, 11.9 / Math.max(0.42, aspect)) : 10.5;
     };
 
     // Faint Distant Twilight Alpine Mountain Ridge Backdrop Plane
