@@ -8,6 +8,7 @@ interface Caravelle3DStageProps {
   onDoorHoverChange: (hovered: boolean) => void;
 }
 
+/** Soft dark ambient-occlusion contact shadow directly under the Caravelle T5 */
 function createContactShadowTexture(): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -15,9 +16,9 @@ function createContactShadowTexture(): THREE.CanvasTexture {
   const ctx = canvas.getContext('2d');
   if (ctx) {
     ctx.clearRect(0, 0, 512, 256);
-    const grad = ctx.createRadialGradient(256, 128, 30, 256, 128, 225);
-    grad.addColorStop(0, 'rgba(0,0,0,0.92)');
-    grad.addColorStop(0.55, 'rgba(0,0,0,0.68)');
+    const grad = ctx.createRadialGradient(256, 128, 28, 256, 128, 224);
+    grad.addColorStop(0, 'rgba(0,0,0,0.94)');
+    grad.addColorStop(0.55, 'rgba(0,0,0,0.72)');
     grad.addColorStop(0.82, 'rgba(0,0,0,0.22)');
     grad.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = grad;
@@ -28,18 +29,40 @@ function createContactShadowTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-function createAsphaltRoughnessTexture(): THREE.CanvasTexture {
+/** Cool azure-blue (#0EA5E9 / #38BDF8) radial focus spotlight pool on the dark satin floor */
+function createAzureSpotlightTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.clearRect(0, 0, 512, 512);
+    const grad = ctx.createRadialGradient(256, 256, 10, 256, 256, 248);
+    grad.addColorStop(0, 'rgba(56, 189, 248, 0.34)');
+    grad.addColorStop(0.35, 'rgba(14, 165, 233, 0.18)');
+    grad.addColorStop(0.68, 'rgba(2, 132, 199, 0.06)');
+    grad.addColorStop(1, 'rgba(9, 9, 11, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 512, 512);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/** Subtle dark satin studio floor roughness grain */
+function createStudioFloorRoughness(): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 256;
   const ctx = canvas.getContext('2d');
   if (ctx) {
-    ctx.fillStyle = '#a0a0a0';
+    ctx.fillStyle = '#909090';
     ctx.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 6000; i++) {
+    for (let i = 0; i < 5000; i++) {
       const x = Math.random() * 256;
       const y = Math.random() * 256;
-      const v = Math.floor(115 + Math.random() * 75);
+      const v = Math.floor(110 + Math.random() * 65);
       ctx.fillStyle = `rgb(${v},${v},${v})`;
       ctx.fillRect(x, y, 2, 2);
     }
@@ -51,374 +74,594 @@ function createAsphaltRoughnessTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-function buildCaravelleT5(): {
+/** Helper to create a rounded rectangle Path (for window cutouts strictly inside body frames) */
+function makeRoundedRectPath(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  r: number
+): THREE.Path {
+  const p = new THREE.Path();
+  p.moveTo(x0 + r, y0);
+  p.lineTo(x1 - r, y0);
+  p.quadraticCurveTo(x1, y0, x1, y0 + r);
+  p.lineTo(x1, y1 - r);
+  p.quadraticCurveTo(x1, y1, x1 - r, y1);
+  p.lineTo(x0 + r, y1);
+  p.quadraticCurveTo(x0, y1, x0, y1 - r);
+  p.lineTo(x0, y0 + r);
+  p.quadraticCurveTo(x0, y0, x0 + r, y0);
+  return p;
+}
+
+/** Helper to build a sleek rounded 2008 VW Caravelle T5 with true recessed azure windows & wheel arches */
+function buildSculptedCaravelleT5(): {
   vanGroup: THREE.Group;
   slidingDoorGroup: THREE.Group;
   doorHitTargets: THREE.Object3D[];
+  doorHandleHighlightMat: THREE.MeshStandardMaterial;
   cabinLight: THREE.PointLight;
 } {
   const vanGroup = new THREE.Group();
 
-  // Materials — 2008 Pearl White VW Caravelle T5 Automotive Studio Shaders
+  // =========================================================================
+  // AUTOMOTIVE STUDIO MATERIALS
+  // =========================================================================
   const whitePaint = new THREE.MeshPhysicalMaterial({
-    color: 0xe6eaf0,
-    roughness: 0.24,
-    metalness: 0.1,
+    color: 0xeef2f7,
+    roughness: 0.18,
+    metalness: 0.08,
     clearcoat: 1.0,
-    clearcoatRoughness: 0.08,
+    clearcoatRoughness: 0.06,
+  });
+
+  const bumperMat = new THREE.MeshPhysicalMaterial({
+    color: 0x1c2028,
+    roughness: 0.48,
+    metalness: 0.14,
+    clearcoat: 0.25,
   });
 
   const darkTrim = new THREE.MeshStandardMaterial({
-    color: 0x181a1f,
+    color: 0x12151b,
     roughness: 0.62,
-    metalness: 0.15,
-  });
-
-  const bumperMat = new THREE.MeshStandardMaterial({
-    color: 0x20232a,
-    roughness: 0.55,
-    metalness: 0.12,
+    metalness: 0.18,
   });
 
   const chromeMat = new THREE.MeshStandardMaterial({
-    color: 0xe2e8f0,
-    roughness: 0.15,
-    metalness: 0.92,
+    color: 0xf1f5f9,
+    roughness: 0.12,
+    metalness: 0.94,
   });
 
-  const tintedGlass = new THREE.MeshPhysicalMaterial({
-    color: 0x163d5c,
-    roughness: 0.08,
-    metalness: 0.14,
-    transmission: 0.22,
-    transparent: true,
-    opacity: 0.86,
-    clearcoat: 1.0,
-  });
-
-  const clearWindshield = new THREE.MeshPhysicalMaterial({
-    color: 0x1e4e73,
+  // Glossy azure-tinted automotive glass (#38BDF8 / #0284C7) — strictly recessed inside frames
+  const azureGlass = new THREE.MeshPhysicalMaterial({
+    color: 0x0284c7,
+    emissive: 0x0ea5e9,
+    emissiveIntensity: 0.14,
     roughness: 0.06,
-    metalness: 0.1,
+    metalness: 0.28,
     transparent: true,
-    opacity: 0.65,
+    opacity: 0.72,
     clearcoat: 1.0,
+    clearcoatRoughness: 0.04,
   });
 
   const interiorDark = new THREE.MeshStandardMaterial({
-    color: 0x14171c,
-    roughness: 0.88,
+    color: 0x11141a,
+    roughness: 0.9,
     metalness: 0.05,
   });
 
   const seatFabric = new THREE.MeshStandardMaterial({
-    color: 0x2d333d,
-    roughness: 0.85,
+    color: 0x2a313d,
+    roughness: 0.84,
     metalness: 0.04,
   });
 
   const headlightMat = new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
-    emissive: 0xfff3d6,
-    emissiveIntensity: 0.45,
-    roughness: 0.08,
+    emissive: 0xe0f2fe,
+    emissiveIntensity: 0.65,
+    roughness: 0.06,
     clearcoat: 1.0,
   });
 
   const amberMat = new THREE.MeshStandardMaterial({
     color: 0xf59e0b,
     emissive: 0xd97706,
-    emissiveIntensity: 0.4,
-    roughness: 0.25,
+    emissiveIntensity: 0.48,
+    roughness: 0.22,
   });
 
   const tailLightMat = new THREE.MeshPhysicalMaterial({
-    color: 0xb91c1c,
+    color: 0xdc2626,
     emissive: 0x991b1b,
-    emissiveIntensity: 0.55,
-    roughness: 0.18,
-    clearcoat: 0.8,
+    emissiveIntensity: 0.65,
+    roughness: 0.16,
+    clearcoat: 0.85,
   });
 
-  const emeraldStepMat = new THREE.MeshStandardMaterial({
+  const doorHandleHighlightMat = new THREE.MeshStandardMaterial({
     color: 0x10b981,
     emissive: 0x10b981,
-    emissiveIntensity: 1.6,
+    emissiveIntensity: 1.35,
     roughness: 0.2,
   });
 
-  // Helper to add a box cleanly
-  const addBox = (
-    parent: THREE.Object3D,
-    w: number,
-    h: number,
-    d: number,
-    x: number,
-    y: number,
-    z: number,
-    mat: THREE.Material
-  ) => {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-    mesh.position.set(x, y, z);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    parent.add(mesh);
-    return mesh;
+  // =========================================================================
+  // 1. SIDE PANEL SILHOUETTE BUILDER (Real Wheel Arches + Real Window Holes!)
+  // X: Rear (-2.38) -> Front Nose (+2.42) | Y: Ground (0) -> Roof (1.92)
+  // =========================================================================
+  const buildRearQuarterShape = () => {
+    const s = new THREE.Shape();
+    s.moveTo(-2.36, 0.34);
+    // Smooth rear corner curve up tailgate edge
+    s.quadraticCurveTo(-2.42, 0.36, -2.41, 0.56);
+    s.lineTo(-2.34, 1.72);
+    s.quadraticCurveTo(-2.3, 1.9, -2.1, 1.91);
+    s.lineTo(-0.58, 1.91);
+    s.lineTo(-0.58, 0.32);
+    // Rear wheel arch cutout (center x=-1.42, y=0.37, r=0.43)
+    s.lineTo(-0.99, 0.32);
+    s.absarc(-1.42, 0.37, 0.43, 0, Math.PI, false);
+    s.lineTo(-2.36, 0.34);
+
+    // Strictly recessed rear quarter window hole
+    s.holes.push(makeRoundedRectPath(-2.22, 1.1, -0.74, 1.77, 0.06));
+    return s;
   };
 
-  // =========================================================================
-  // 1. UNDERBODY CHASSIS, FLOOR PAN & ROOF CAP
-  // X: Rear (-2.42) -> Front Nose (+2.42) | Z: Left (-0.94) -> Right (+0.94)
-  // =========================================================================
-  addBox(vanGroup, 4.76, 0.14, 1.82, 0.0, 0.3, 0, interiorDark);
-  // Roof main shell
-  addBox(vanGroup, 3.68, 0.11, 1.84, -0.54, 1.88, 0, whitePaint);
-  // Roof slight upper crown
-  addBox(vanGroup, 3.45, 0.05, 1.68, -0.54, 1.94, 0, whitePaint);
+  const buildFrontCabShape = () => {
+    const s = new THREE.Shape();
+    s.moveTo(0.52, 0.32);
+    s.lineTo(0.52, 1.91);
+    // Roof corner to sloped A-pillar & windshield
+    s.lineTo(1.12, 1.91);
+    s.quadraticCurveTo(1.26, 1.9, 1.35, 1.76);
+    s.lineTo(1.69, 1.15);
+    // Sculpted sloped 2008 T5 hood curving down to rounded nose
+    s.quadraticCurveTo(2.08, 1.07, 2.34, 0.94);
+    s.quadraticCurveTo(2.45, 0.87, 2.45, 0.72);
+    s.lineTo(2.43, 0.42);
+    s.quadraticCurveTo(2.41, 0.32, 2.28, 0.32);
+    // Front wheel arch cutout (center x=+1.46, y=0.37, r=0.43)
+    s.lineTo(1.89, 0.32);
+    s.absarc(1.46, 0.37, 0.43, 0, Math.PI, false);
+    s.lineTo(0.52, 0.32);
 
-  // =========================================================================
-  // 2. LEFT SIDE FULL BODY WALL (opposite side, z = -0.90)
-  // =========================================================================
-  addBox(vanGroup, 3.82, 0.72, 0.08, -0.48, 0.68, -0.9, whitePaint);
-  addBox(vanGroup, 3.65, 0.72, 0.06, -0.55, 1.44, -0.9, tintedGlass);
-  // Left pillars
-  addBox(vanGroup, 0.18, 0.86, 0.1, -2.32, 1.44, -0.9, whitePaint);
-  addBox(vanGroup, 0.14, 0.86, 0.1, -0.62, 1.44, -0.9, whitePaint);
-  addBox(vanGroup, 0.14, 0.86, 0.1, 0.54, 1.44, -0.9, whitePaint);
+    // Strictly recessed sloped front cab window hole (sits inside A & B pillars)
+    const cabWin = new THREE.Path();
+    cabWin.moveTo(0.68, 1.1);
+    cabWin.lineTo(1.52, 1.1);
+    cabWin.quadraticCurveTo(1.56, 1.1, 1.54, 1.16);
+    cabWin.lineTo(1.24, 1.72);
+    cabWin.quadraticCurveTo(1.2, 1.77, 1.12, 1.77);
+    cabWin.lineTo(0.68, 1.77);
+    cabWin.quadraticCurveTo(0.62, 1.77, 0.62, 1.71);
+    cabWin.lineTo(0.62, 1.16);
+    cabWin.quadraticCurveTo(0.62, 1.1, 0.68, 1.1);
+    s.holes.push(cabWin);
 
-  // =========================================================================
-  // 3. REAR TAILGATE (LEFT end, x = -2.40) + VERTICAL T5 TAIL LIGHTS
-  // =========================================================================
-  addBox(vanGroup, 0.12, 0.78, 1.84, -2.38, 0.68, 0, whitePaint);
-  addBox(vanGroup, 0.1, 0.74, 1.56, -2.38, 1.44, 0, tintedGlass);
-  addBox(vanGroup, 0.12, 0.78, 0.16, -2.38, 1.44, -0.84, whitePaint);
-  addBox(vanGroup, 0.12, 0.78, 0.16, -2.38, 1.44, 0.84, whitePaint);
-  // Rear lower bumper
-  addBox(vanGroup, 0.22, 0.22, 1.88, -2.39, 0.36, 0, bumperMat);
-  // Characteristic vertical T5 tail-light clusters (left & right corners)
-  addBox(vanGroup, 0.08, 0.44, 0.16, -2.42, 0.78, 0.84, tailLightMat);
-  addBox(vanGroup, 0.08, 0.44, 0.16, -2.42, 0.78, -0.84, tailLightMat);
+    return s;
+  };
 
-  // =========================================================================
-  // 4. FRONT NOSE, HOOD, SLOPED WINDSHIELD, GRILLE & HEADLIGHTS (RIGHT, +X)
-  // =========================================================================
-  // Front lower engine bay & bumper body
-  addBox(vanGroup, 0.96, 0.66, 1.84, 1.9, 0.65, 0, whitePaint);
-  // Front bumper lower valance
-  addBox(vanGroup, 0.24, 0.24, 1.88, 2.34, 0.36, 0, bumperMat);
-  // Sloped hood deck
-  const hoodGeo = new THREE.BoxGeometry(0.92, 0.1, 1.82);
-  const hoodMesh = new THREE.Mesh(hoodGeo, whitePaint);
-  hoodMesh.position.set(1.9, 1.04, 0);
-  hoodMesh.rotation.z = -0.22;
-  hoodMesh.castShadow = true;
-  hoodMesh.receiveShadow = true;
-  vanGroup.add(hoodMesh);
+  const buildSlidingDoorShape = () => {
+    const s = new THREE.Shape();
+    s.moveTo(-0.57, 0.33);
+    s.lineTo(0.51, 0.33);
+    s.lineTo(0.51, 1.88);
+    s.lineTo(-0.57, 1.88);
+    s.lineTo(-0.57, 0.33);
 
-  // Sloped front windshield
-  const windshieldGeo = new THREE.BoxGeometry(0.06, 0.96, 1.66);
-  const windshieldMesh = new THREE.Mesh(windshieldGeo, clearWindshield);
-  windshieldMesh.position.set(1.48, 1.48, 0);
-  windshieldMesh.rotation.z = 0.46;
-  vanGroup.add(windshieldMesh);
+    // Strictly recessed sliding door window hole
+    s.holes.push(makeRoundedRectPath(-0.47, 1.1, 0.41, 1.77, 0.05));
+    return s;
+  };
 
-  // Left & Right sloped A-Pillars
-  for (const side of [-1, 1]) {
-    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.98, 0.11), whitePaint);
-    pillar.position.set(1.48, 1.48, side * 0.86);
-    pillar.rotation.z = 0.46;
-    pillar.castShadow = true;
-    vanGroup.add(pillar);
-  }
+  const panelExtrudeOpts: THREE.ExtrudeGeometryOptions = {
+    depth: 0.06,
+    bevelEnabled: true,
+    bevelThickness: 0.03,
+    bevelSize: 0.025,
+    bevelSegments: 4,
+    curveSegments: 20,
+  };
 
-  // Front grille + chrome slats + VW emblem
-  addBox(vanGroup, 0.06, 0.24, 1.16, 2.38, 0.78, 0, darkTrim);
-  addBox(vanGroup, 0.07, 0.025, 1.14, 2.39, 0.84, 0, chromeMat);
-  addBox(vanGroup, 0.07, 0.025, 1.14, 2.39, 0.73, 0, chromeMat);
-  const vwEmblem = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.04, 24), chromeMat);
-  vwEmblem.rotation.z = Math.PI / 2;
-  vwEmblem.position.set(2.41, 0.78, 0);
-  vanGroup.add(vwEmblem);
+  // --- RIGHT SIDE (CAMERA SIDE, z ≈ +0.86) ---
+  const rightRearMesh = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(buildRearQuarterShape(), panelExtrudeOpts),
+    whitePaint
+  );
+  rightRearMesh.position.z = 0.84;
+  rightRearMesh.castShadow = true;
+  rightRearMesh.receiveShadow = true;
+  vanGroup.add(rightRearMesh);
 
-  // Sculpted 2008 T5 Headlights & Amber Side Turn Indicators
-  for (const side of [-1, 1]) {
-    addBox(vanGroup, 0.14, 0.22, 0.34, 2.34, 0.8, side * 0.74, headlightMat);
-    addBox(vanGroup, 0.08, 0.06, 0.12, 2.36, 0.72, side * 0.88, amberMat);
-    // Side fender repeater
-    addBox(vanGroup, 0.07, 0.03, 0.02, 1.78, 0.76, side * 0.93, amberMat);
-    // Sculpted wing mirror
-    const mirrorArm = addBox(vanGroup, 0.08, 0.06, 0.14, 1.32, 1.14, side * 0.98, darkTrim);
-    mirrorArm.castShadow = true;
-    addBox(vanGroup, 0.14, 0.18, 0.14, 1.32, 1.2, side * 1.05, whitePaint);
-    addBox(vanGroup, 0.12, 0.16, 0.04, 1.33, 1.2, side * 0.99, darkTrim);
-  }
+  const rightFrontMesh = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(buildFrontCabShape(), panelExtrudeOpts),
+    whitePaint
+  );
+  rightFrontMesh.position.z = 0.84;
+  rightFrontMesh.castShadow = true;
+  rightFrontMesh.receiveShadow = true;
+  vanGroup.add(rightFrontMesh);
 
-  // =========================================================================
-  // 5. RIGHT SIDE BODY (CAMERA SIDE, z = +0.90) WITH REAL DOORWAY APERTURE!
-  // Rear quarter panel: x = -2.38 to -0.60
-  // Sliding Door Aperture (OPEN!): x = -0.60 to +0.54
-  // Front right passenger door: x = +0.54 to +1.45
-  // =========================================================================
-  // Rear-right quarter lower body
-  addBox(vanGroup, 1.76, 0.74, 0.08, -1.49, 0.68, 0.9, whitePaint);
-  // Rear-right quarter panoramic tinted glass
-  addBox(vanGroup, 1.56, 0.7, 0.06, -1.49, 1.44, 0.9, tintedGlass);
-  // Rear-right D-pillar & C-pillar framing
-  addBox(vanGroup, 0.16, 0.82, 0.09, -2.32, 1.44, 0.9, whitePaint);
-  addBox(vanGroup, 0.14, 0.82, 0.09, -0.65, 1.44, 0.9, whitePaint);
+  // Strictly recessed right rear & front cab azure windows (z = 0.855, strictly behind outer bevel z = 0.93)
+  const rightRearGlass = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.68, 0.02), azureGlass);
+  rightRearGlass.position.set(-1.48, 1.435, 0.855);
+  vanGroup.add(rightRearGlass);
+
+  // Front cab glass shaped cleanly to fit strictly inside the cab window hole
+  const cabGlassShape = new THREE.Shape();
+  cabGlassShape.moveTo(0.62, 1.1);
+  cabGlassShape.lineTo(1.55, 1.1);
+  cabGlassShape.lineTo(1.23, 1.77);
+  cabGlassShape.lineTo(0.62, 1.77);
+  cabGlassShape.closePath();
+  const rightCabGlass = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(cabGlassShape, { depth: 0.02, bevelEnabled: false }),
+    azureGlass
+  );
+  rightCabGlass.position.z = 0.845;
+  vanGroup.add(rightCabGlass);
 
   // Recessed black horizontal sliding door rail on rear-right quarter panel
-  addBox(vanGroup, 1.66, 0.045, 0.03, -1.46, 1.02, 0.945, darkTrim);
+  const sideRail = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.036, 0.02), darkTrim);
+  sideRail.position.set(-1.44, 1.03, 0.925);
+  vanGroup.add(sideRail);
 
-  // Front-right passenger door (fixed)
-  addBox(vanGroup, 0.92, 0.74, 0.08, 1.0, 0.68, 0.9, whitePaint);
-  // Front-right door window
-  addBox(vanGroup, 0.78, 0.68, 0.06, 0.98, 1.42, 0.9, tintedGlass);
-  // Front-right B-pillar
-  addBox(vanGroup, 0.1, 0.86, 0.09, 0.56, 1.44, 0.9, whitePaint);
-  // Front door handle
-  addBox(vanGroup, 0.14, 0.04, 0.04, 0.72, 0.94, 0.95, whitePaint);
+  // Right front door handle
+  const frontHandle = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.038, 0.032), whitePaint);
+  frontHandle.position.set(0.7, 0.96, 0.935);
+  vanGroup.add(frontHandle);
 
-  // Lower rocker trim along right side
-  addBox(vanGroup, 4.5, 0.1, 0.08, 0.0, 0.32, 0.91, bumperMat);
+  // --- LEFT SIDE (OPPOSITE SIDE, z ≈ -0.90) ---
+  const leftRearMesh = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(buildRearQuarterShape(), panelExtrudeOpts),
+    whitePaint
+  );
+  leftRearMesh.position.z = -0.9;
+  leftRearMesh.castShadow = true;
+  vanGroup.add(leftRearMesh);
 
-  // Illuminated emerald step-in threshold inside doorway aperture
-  addBox(vanGroup, 0.92, 0.025, 0.08, -0.04, 0.38, 0.84, emeraldStepMat);
+  const leftMidMesh = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(buildSlidingDoorShape(), panelExtrudeOpts),
+    whitePaint
+  );
+  leftMidMesh.position.z = -0.9;
+  leftMidMesh.castShadow = true;
+  vanGroup.add(leftMidMesh);
+
+  const leftFrontMesh = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(buildFrontCabShape(), panelExtrudeOpts),
+    whitePaint
+  );
+  leftFrontMesh.position.z = -0.9;
+  leftFrontMesh.castShadow = true;
+  vanGroup.add(leftFrontMesh);
+
+  // Left side recessed azure windows
+  const leftGlassStrip = new THREE.Mesh(new THREE.BoxGeometry(2.65, 0.68, 0.02), azureGlass);
+  leftGlassStrip.position.set(-0.92, 1.435, -0.865);
+  vanGroup.add(leftGlassStrip);
+
+  const leftCabGlass = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(cabGlassShape, { depth: 0.02, bevelEnabled: false }),
+    azureGlass
+  );
+  leftCabGlass.position.z = -0.875;
+  vanGroup.add(leftCabGlass);
 
   // =========================================================================
-  // 6. REAL 3D INTERIOR CABIN SEATS (VISIBLE WHEN SLIDING DOOR OPENS!)
+  // 2. ROOF SHELL, FLOOR PAN, SCULPTED HOOD, NOSE, REAR TAILGATE & WINDSHIELD
   // =========================================================================
-  // Interior dashboard & steering wheel (front-left)
-  addBox(vanGroup, 0.42, 0.45, 1.72, 1.38, 0.88, 0, interiorDark);
-  const wheelRing = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.024, 10, 24), darkTrim);
-  wheelRing.position.set(1.12, 1.05, -0.48);
-  wheelRing.rotation.y = Math.PI / 2;
-  wheelRing.rotation.x = 0.25;
-  vanGroup.add(wheelRing);
+  // Main floor pan
+  const floorPan = new THREE.Mesh(new THREE.BoxGeometry(4.62, 0.1, 1.72), interiorDark);
+  floorPan.position.set(-0.02, 0.34, 0);
+  vanGroup.add(floorPan);
 
-  const addCabinSeat = (x: number, z: number, width = 0.44) => {
+  // Rounded Roof Cap spanning left-to-right cleanly across Z
+  const roofShape = new THREE.Shape();
+  roofShape.moveTo(-2.14, 1.84);
+  roofShape.lineTo(1.14, 1.84);
+  roofShape.quadraticCurveTo(1.25, 1.86, 1.28, 1.91);
+  roofShape.lineTo(1.12, 1.95);
+  roofShape.lineTo(-2.12, 1.95);
+  roofShape.quadraticCurveTo(-2.26, 1.93, -2.28, 1.86);
+  roofShape.closePath();
+
+  const roofMesh = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(roofShape, {
+      depth: 1.74,
+      bevelEnabled: true,
+      bevelThickness: 0.05,
+      bevelSize: 0.04,
+      bevelSegments: 5,
+    }),
+    whitePaint
+  );
+  roofMesh.position.z = -0.87;
+  roofMesh.castShadow = true;
+  roofMesh.receiveShadow = true;
+  vanGroup.add(roofMesh);
+
+  // Sculpted Front Hood & Rounded Nose Block (connects left & right front fenders seamlessly)
+  const noseShape = new THREE.Shape();
+  noseShape.moveTo(1.56, 0.36);
+  noseShape.lineTo(2.26, 0.36);
+  noseShape.quadraticCurveTo(2.43, 0.37, 2.44, 0.56);
+  noseShape.lineTo(2.44, 0.74);
+  noseShape.quadraticCurveTo(2.42, 0.9, 2.28, 0.96);
+  noseShape.quadraticCurveTo(1.98, 1.08, 1.66, 1.15);
+  noseShape.lineTo(1.56, 1.12);
+  noseShape.closePath();
+
+  const noseMesh = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(noseShape, {
+      depth: 1.72,
+      bevelEnabled: true,
+      bevelThickness: 0.05,
+      bevelSize: 0.04,
+      bevelSegments: 5,
+    }),
+    whitePaint
+  );
+  noseMesh.position.z = -0.86;
+  noseMesh.castShadow = true;
+  noseMesh.receiveShadow = true;
+  vanGroup.add(noseMesh);
+
+  // Sloped Front Windshield — strictly recessed between A-pillars (width 1.60 < body 1.80)
+  const windshield = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.8, 1.58), azureGlass);
+  windshield.position.set(1.48, 1.48, 0);
+  windshield.rotation.z = 0.49;
+  vanGroup.add(windshield);
+
+  // Front Black T5 Grille + Dual Chrome Slats + Silver VW Medallion
+  const grille = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.22, 1.12), darkTrim);
+  grille.position.set(2.46, 0.77, 0);
+  vanGroup.add(grille);
+
+  for (const gy of [0.83, 0.72]) {
+    const slat = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.02, 1.08), chromeMat);
+    slat.position.set(2.47, gy, 0);
+    vanGroup.add(slat);
+  }
+
+  const vwBadge = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.03, 24), chromeMat);
+  vwBadge.rotation.z = Math.PI / 2;
+  vwBadge.position.set(2.49, 0.775, 0);
+  vanGroup.add(vwBadge);
+
+  // Front & Rear Sculpted Lower Bumpers + Right Lower Sill
+  const frontBumper = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.2, 1.84), bumperMat);
+  frontBumper.position.set(2.38, 0.36, 0);
+  vanGroup.add(frontBumper);
+
+  const rearBumper = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 1.84), bumperMat);
+  rearBumper.position.set(-2.36, 0.36, 0);
+  vanGroup.add(rearBumper);
+
+  const rightSill = new THREE.Mesh(new THREE.BoxGeometry(2.04, 0.09, 0.08), bumperMat);
+  rightSill.position.set(0.02, 0.31, 0.89);
+  vanGroup.add(rightSill);
+
+  // Rear Tailgate Core + Recessed Rear Azure Glass + Vertical T5 Taillights
+  const rearLower = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.74, 1.76), whitePaint);
+  rearLower.position.set(-2.34, 0.72, 0);
+  vanGroup.add(rearLower);
+
+  const rearGlass = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.66, 1.52), azureGlass);
+  rearGlass.position.set(-2.34, 1.44, 0);
+  vanGroup.add(rearGlass);
+
+  // Headlights, Amber Indicators, Taillights & Aerodynamic Wing Mirrors (both sides)
+  for (const side of [-1, 1]) {
+    // Crystal Headlight
+    const hl = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.2, 0.32), headlightMat);
+    hl.position.set(2.41, 0.79, side * 0.72);
+    vanGroup.add(hl);
+
+    // Front Amber Turn Signal
+    const turn = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.1), amberMat);
+    turn.position.set(2.42, 0.71, side * 0.86);
+    vanGroup.add(turn);
+
+    // Side Fender Repeater
+    const rep = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.026, 0.02), amberMat);
+    rep.position.set(1.86, 0.78, side * 0.93);
+    vanGroup.add(rep);
+
+    // Vertical 2008 T5 Rear Tail-Light Cluster
+    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.42, 0.14), tailLightMat);
+    tl.position.set(-2.39, 0.82, side * 0.84);
+    vanGroup.add(tl);
+
+    // Rounded Sculpted Wing Mirror
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.045, 0.12), darkTrim);
+    arm.position.set(1.36, 1.15, side * 0.96);
+    vanGroup.add(arm);
+
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.095, 16, 12), whitePaint);
+    cap.scale.set(0.85, 1.05, 0.75);
+    cap.position.set(1.36, 1.2, side * 1.04);
+    vanGroup.add(cap);
+  }
+
+  // =========================================================================
+  // 3. REAL 3D HOLLOWED-OUT CABIN INTERIOR SEATS (VISIBLE WHEN DOOR SLIDES OPEN!)
+  // =========================================================================
+  // Dashboard & Steering Wheel
+  const dash = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.42, 1.64), interiorDark);
+  dash.position.set(1.36, 0.88, 0);
+  vanGroup.add(dash);
+
+  const steering = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.022, 10, 24), darkTrim);
+  steering.position.set(1.1, 1.06, -0.48);
+  steering.rotation.y = Math.PI / 2;
+  steering.rotation.x = 0.25;
+  vanGroup.add(steering);
+
+  // Subtle emerald courtesy step-in strip inside the open doorway sill
+  const stepLight = new THREE.Mesh(
+    new THREE.BoxGeometry(0.88, 0.02, 0.05),
+    doorHandleHighlightMat
+  );
+  stepLight.position.set(-0.03, 0.4, 0.81);
+  vanGroup.add(stepLight);
+
+  const addCabinSeat = (x: number, z: number, width = 0.42) => {
     const g = new THREE.Group();
     g.position.set(x, 0.42, z);
-    // Cushion
-    addBox(g, 0.46, 0.14, width, 0, 0.14, 0, seatFabric);
-    // Backrest
-    const back = addBox(g, 0.13, 0.62, width, -0.2, 0.48, 0, seatFabric);
+    const cushion = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.13, width), seatFabric);
+    cushion.position.set(0, 0.13, 0);
+    g.add(cushion);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.58, width), seatFabric);
+    back.position.set(-0.19, 0.46, 0);
     back.rotation.z = 0.14;
-    // Headrest
-    addBox(g, 0.11, 0.2, width * 0.62, -0.25, 0.88, 0, seatFabric);
+    g.add(back);
+    const headrest = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.18, width * 0.6), seatFabric);
+    headrest.position.set(-0.24, 0.84, 0);
+    g.add(headrest);
     vanGroup.add(g);
   };
 
-  // Front Row: Driver (-0.52) + aisle gap + F1 (+0.10) + F2 (+0.54)
-  addCabinSeat(0.86, -0.52, 0.44);
-  addCabinSeat(0.86, 0.08, 0.42);
-  addCabinSeat(0.86, 0.52, 0.42);
+  // Front Row: Driver (-0.52) + center gap + F1 (+0.08) + F2 (+0.52)
+  addCabinSeat(0.84, -0.52, 0.42);
+  addCabinSeat(0.84, 0.08, 0.4);
+  addCabinSeat(0.84, 0.52, 0.4);
 
-  // Middle Row: M1, M2, M3 (clearly visible right inside the sliding doorway!)
-  addCabinSeat(-0.12, -0.52, 0.44);
-  addCabinSeat(-0.12, 0.0, 0.44);
-  addCabinSeat(-0.12, 0.52, 0.44);
+  // Middle Row: M1, M2, M3 (immediately revealed when sliding door opens!)
+  addCabinSeat(-0.14, -0.52, 0.42);
+  addCabinSeat(-0.14, 0.0, 0.42);
+  addCabinSeat(-0.14, 0.52, 0.42);
 
   // Rear Row: R1, R2, R3
-  addCabinSeat(-1.18, -0.52, 0.44);
-  addCabinSeat(-1.18, 0.0, 0.44);
-  addCabinSeat(-1.18, 0.52, 0.44);
+  addCabinSeat(-1.18, -0.52, 0.42);
+  addCabinSeat(-1.18, 0.0, 0.42);
+  addCabinSeat(-1.18, 0.52, 0.42);
 
-  // Interior warm-white cabin dome light so seats gleam cleanly when door slides open
-  const cabinLight = new THREE.PointLight(0xeef6ff, 1.4, 3.6);
+  // Interior Cabin Light (brightens smoothly when door opens)
+  const cabinLight = new THREE.PointLight(0xe0f2fe, 1.4, 3.8);
   cabinLight.position.set(-0.08, 1.66, 0.15);
   vanGroup.add(cabinLight);
 
   // =========================================================================
-  // 7. REAL 3D RIGHT-SIDE SLIDING DOOR GROUP (INTERACTIVE MESH)
-  // Covers exact doorway aperture x ∈ [-0.60, +0.52], y ∈ [0.34, 1.84], z = +0.91
+  // 4. INTERACTIVE 3D RIGHT-SIDE SLIDING DOOR (BEVELED + FLUSH AZURE GLASS)
   // =========================================================================
   const slidingDoorGroup = new THREE.Group();
   const doorHitTargets: THREE.Object3D[] = [];
 
-  const doorLower = addBox(slidingDoorGroup, 1.14, 0.74, 0.07, -0.04, 0.68, 0.91, whitePaint);
-  const doorGlass = addBox(slidingDoorGroup, 1.06, 0.7, 0.055, -0.04, 1.43, 0.91, tintedGlass);
-  // Subtle T5 flush sliding door top frame & vertical edges
-  addBox(slidingDoorGroup, 1.14, 0.07, 0.07, -0.04, 1.81, 0.91, whitePaint);
-  addBox(slidingDoorGroup, 0.05, 0.74, 0.07, -0.585, 1.43, 0.91, whitePaint);
-  addBox(slidingDoorGroup, 0.05, 0.74, 0.07, 0.505, 1.43, 0.91, whitePaint);
-  // Door lower black sill strip + crisp shut-line seams
-  addBox(slidingDoorGroup, 1.14, 0.09, 0.075, -0.04, 0.34, 0.915, bumperMat);
-  addBox(slidingDoorGroup, 0.014, 1.48, 0.082, -0.605, 1.06, 0.915, darkTrim);
-  addBox(slidingDoorGroup, 0.014, 1.48, 0.082, 0.525, 1.06, 0.915, darkTrim);
-  addBox(slidingDoorGroup, 1.13, 0.016, 0.082, -0.04, 1.02, 0.915, darkTrim);
-  // Sliding Door Handle + crisp emerald tactile indicator dot
-  const doorHandle = addBox(slidingDoorGroup, 0.16, 0.045, 0.045, 0.34, 0.94, 0.96, whitePaint);
-  addBox(slidingDoorGroup, 0.045, 0.045, 0.025, 0.34, 0.94, 0.985, emeraldStepMat);
+  const doorBodyMesh = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(buildSlidingDoorShape(), panelExtrudeOpts),
+    whitePaint
+  );
+  doorBodyMesh.position.z = 0.84;
+  doorBodyMesh.castShadow = true;
+  doorBodyMesh.receiveShadow = true;
+  slidingDoorGroup.add(doorBodyMesh);
 
-  doorHitTargets.push(doorLower, doorGlass, doorHandle);
+  // Strictly recessed azure sliding door window (z = 0.855, sits cleanly inside the beveled door hole!)
+  const doorWindowMesh = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.68, 0.02), azureGlass);
+  doorWindowMesh.position.set(-0.03, 1.435, 0.855);
+  slidingDoorGroup.add(doorWindowMesh);
+
+  // Crisp subtle shut-line trim along sliding door edges
+  const doorSeamLeft = new THREE.Mesh(new THREE.BoxGeometry(0.012, 1.52, 0.02), darkTrim);
+  doorSeamLeft.position.set(-0.575, 1.1, 0.925);
+  slidingDoorGroup.add(doorSeamLeft);
+
+  const doorSeamRight = new THREE.Mesh(new THREE.BoxGeometry(0.012, 1.52, 0.02), darkTrim);
+  doorSeamRight.position.set(0.515, 1.1, 0.925);
+  slidingDoorGroup.add(doorSeamRight);
+
+  // Sculpted Sliding Door Handle + Subtle Interactive Highlight Accent
+  const doorHandle = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.04, 0.035), whitePaint);
+  doorHandle.position.set(0.34, 0.96, 0.94);
+  slidingDoorGroup.add(doorHandle);
+
+  const handleAccent = new THREE.Mesh(
+    new THREE.BoxGeometry(0.045, 0.02, 0.012),
+    doorHandleHighlightMat
+  );
+  handleAccent.position.set(0.34, 0.96, 0.962);
+  slidingDoorGroup.add(handleAccent);
+
+  doorHitTargets.push(doorBodyMesh, doorWindowMesh, doorHandle);
   vanGroup.add(slidingDoorGroup);
 
   // =========================================================================
-  // 8. FOUR DETAILED 5-SPOKE VW ALLOY WHEELS
+  // 5. FOUR REALISTIC MULTI-SPOKE (6-SPOKE) VW ALLOY WHEELS + TORUS TIRES
   // =========================================================================
   const tireMat = new THREE.MeshStandardMaterial({
-    color: 0x111317,
-    roughness: 0.85,
-    metalness: 0.05,
+    color: 0x101216,
+    roughness: 0.84,
+    metalness: 0.06,
   });
+
   const alloyMat = new THREE.MeshStandardMaterial({
-    color: 0xd4dbe5,
-    roughness: 0.24,
-    metalness: 0.82,
+    color: 0xdce3ec,
+    roughness: 0.2,
+    metalness: 0.88,
   });
 
   const wheelPositions: [number, number][] = [
-    [-1.44, 0.92],
-    [-1.44, -0.92],
-    [1.48, 0.92],
-    [1.48, -0.92],
+    [-1.42, 0.84],
+    [-1.42, -0.84],
+    [1.46, 0.84],
+    [1.46, -0.84],
   ];
 
   for (const [wx, wz] of wheelPositions) {
     const wheelGroup = new THREE.Group();
-    wheelGroup.position.set(wx, 0.36, wz);
+    wheelGroup.position.set(wx, 0.37, wz);
 
-    // Wheel arch dark well cutout backing
-    const well = new THREE.Mesh(new THREE.CylinderGeometry(0.41, 0.41, 0.14, 24), interiorDark);
+    // Dark recessed wheel well arch backing
+    const well = new THREE.Mesh(new THREE.CylinderGeometry(0.41, 0.41, 0.16, 28), interiorDark);
     well.rotation.x = Math.PI / 2;
-    well.position.z = wz > 0 ? -0.08 : 0.08;
+    well.position.z = wz > 0 ? -0.09 : 0.09;
     wheelGroup.add(well);
 
-    // Rubber tire
-    const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.24, 32), tireMat);
-    tire.rotation.x = Math.PI / 2;
-    tire.castShadow = true;
-    wheelGroup.add(tire);
+    // Contoured rubber tire (Cylinder core + rounded Torus sidewall shoulders)
+    const tireCore = new THREE.Mesh(new THREE.CylinderGeometry(0.355, 0.355, 0.22, 36), tireMat);
+    tireCore.rotation.x = Math.PI / 2;
+    tireCore.castShadow = true;
+    wheelGroup.add(tireCore);
 
-    // Alloy rim barrel
-    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.25, 24), alloyMat);
-    rim.rotation.x = Math.PI / 2;
-    wheelGroup.add(rim);
+    const tireShoulder = new THREE.Mesh(new THREE.TorusGeometry(0.31, 0.062, 12, 36), tireMat);
+    tireShoulder.position.z = wz > 0 ? 0.06 : -0.06;
+    wheelGroup.add(tireShoulder);
 
-    // Dark recessed rotor face
-    const rotor = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.255, 20), darkTrim);
+    // Brushed alloy outer rim lip
+    const rimLip = new THREE.Mesh(new THREE.TorusGeometry(0.235, 0.02, 10, 32), alloyMat);
+    rimLip.position.z = wz > 0 ? 0.112 : -0.112;
+    wheelGroup.add(rimLip);
+
+    // Recessed dark brake rotor
+    const rotor = new THREE.Mesh(new THREE.CylinderGeometry(0.225, 0.225, 0.225, 24), darkTrim);
     rotor.rotation.x = Math.PI / 2;
     wheelGroup.add(rotor);
 
-    // 5-Spoke VW Alloy Geometry
-    for (let s = 0; s < 5; s++) {
-      const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.22, 0.265), alloyMat);
-      const angle = (s * Math.PI * 2) / 5;
-      spoke.position.set(Math.sin(angle) * 0.1, Math.cos(angle) * 0.1, 0);
+    // 6-Spoke Sculpted VW Alloy Geometry
+    for (let s = 0; s < 6; s++) {
+      const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.044, 0.225, 0.238), alloyMat);
+      const angle = (s * Math.PI * 2) / 6;
+      spoke.position.set(Math.sin(angle) * 0.105, Math.cos(angle) * 0.105, 0);
       spoke.rotation.z = -angle;
       wheelGroup.add(spoke);
     }
 
     // Center hubcap
-    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.27, 16), chromeMat);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.25, 20), chromeMat);
     hub.rotation.x = Math.PI / 2;
     wheelGroup.add(hub);
 
     vanGroup.add(wheelGroup);
   }
 
-  return { vanGroup, slidingDoorGroup, doorHitTargets, cabinLight };
+  return { vanGroup, slidingDoorGroup, doorHitTargets, doorHandleHighlightMat, cabinLight };
 }
 
 export function Caravelle3DStage({
@@ -443,7 +686,7 @@ export function Caravelle3DStage({
     try {
       renderer = new THREE.WebGLRenderer({
         antialias: true,
-        alpha: true,
+        alpha: false,
         powerPreference: 'high-performance',
       });
     } catch {
@@ -452,16 +695,20 @@ export function Caravelle3DStage({
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setClearColor(0x000000, 0);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    renderer.toneMappingExposure = 1.02;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
 
+    // =========================================================================
+    // DARK ARCHITECTURAL STUDIO (#09090B) + AZURE FOCUS SPOTLIGHT (#0EA5E9 / #38BDF8)
+    // =========================================================================
     const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x09090b);
+    scene.fog = new THREE.Fog(0x09090b, 14, 34);
 
-    // Daylight Environment Reflections (PMREM) for glossy pearl-white clearcoat & blue-tinted glass
+    // Studio Reflections (PMREM) so pearl-white clearcoat & azure glass gleam realistically
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     const envTex = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
     scene.environment = envTex;
@@ -474,14 +721,55 @@ export function Caravelle3DStage({
     );
 
     const getIdleCameraDistance = (aspect: number) => {
-      return aspect < 1 ? Math.min(20.5, 9.2 / Math.max(0.42, aspect)) : 8.2;
+      return aspect < 1 ? Math.min(20.5, 9.2 / Math.max(0.42, aspect)) : 8.15;
     };
 
-    // Soft ambient occlusion contact shadow directly under the VW Caravelle T5 on the real road
-    const roughnessTex = createAsphaltRoughnessTexture();
+    // Dark Satin Studio Floor reflecting the soft azure focus spotlight
+    const roughnessTex = createStudioFloorRoughness();
+    const floorMat = new THREE.MeshStandardMaterial({
+      color: 0x0a0b0e,
+      roughness: 0.58,
+      roughnessMap: roughnessTex,
+      metalness: 0.24,
+    });
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(58, 58), floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // Soft Azure-Blue Focus Light Pool Directly Beneath the Vehicle (#0EA5E9 / #38BDF8)
+    const azureGlowTex = createAzureSpotlightTexture();
+    const azureGroundPool = new THREE.Mesh(
+      new THREE.PlaneGeometry(9.6, 5.4),
+      new THREE.MeshBasicMaterial({
+        map: azureGlowTex,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      })
+    );
+    azureGroundPool.rotation.x = -Math.PI / 2;
+    azureGroundPool.position.set(0, 0.004, 0.1);
+    scene.add(azureGroundPool);
+
+    // Atmospheric Cool Azure Studio Backdrop Glow Behind the Van
+    const azureBackdropGlow = new THREE.Mesh(
+      new THREE.PlaneGeometry(14, 6.8),
+      new THREE.MeshBasicMaterial({
+        map: azureGlowTex,
+        transparent: true,
+        opacity: 0.55,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      })
+    );
+    azureBackdropGlow.position.set(0, 1.85, -3.6);
+    scene.add(azureBackdropGlow);
+
+    // Soft Ambient-Occlusion Contact Shadow right under tires & chassis
     const contactTex = createContactShadowTexture();
     const contactShadow = new THREE.Mesh(
-      new THREE.PlaneGeometry(5.6, 2.55),
+      new THREE.PlaneGeometry(5.55, 2.45),
       new THREE.MeshBasicMaterial({
         map: contactTex,
         transparent: true,
@@ -489,17 +777,18 @@ export function Caravelle3DStage({
       })
     );
     contactShadow.rotation.x = -Math.PI / 2;
-    contactShadow.position.set(0, 0.008, 0);
+    contactShadow.position.set(0, 0.009, 0);
     scene.add(contactShadow);
 
     // =========================================================================
-    // 3-POINT AUTOMOTIVE STUDIO LIGHTING (Key + Crisp Rim + Cool Fill)
+    // STUDIO LIGHTING: AZURE OVERHEAD FOCUS SPOTLIGHT + KEY + CRISP RIM
     // =========================================================================
-    const hemi = new THREE.HemisphereLight(0xcbd5e1, 0x09090b, 0.55);
+    const hemi = new THREE.HemisphereLight(0xbae6fd, 0x09090b, 0.48);
     scene.add(hemi);
 
-    const keyLight = new THREE.DirectionalLight(0xfff7ed, 1.35);
-    keyLight.position.set(4.5, 8.2, 5.2);
+    // Primary soft automotive studio key light
+    const keyLight = new THREE.DirectionalLight(0xf8fafc, 1.28);
+    keyLight.position.set(4.2, 8.0, 5.6);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.set(1024, 1024);
     keyLight.shadow.camera.near = 1;
@@ -511,21 +800,34 @@ export function Caravelle3DStage({
     keyLight.shadow.bias = -0.0005;
     scene.add(keyLight);
 
-    // Crisp overhead-rear rim light sculpting the white roofline & hood crease
-    const rimLight = new THREE.DirectionalLight(0xbae6fd, 1.45);
-    rimLight.position.set(-4.0, 5.8, -5.5);
+    // Overhead Cool Azure Focus Spotlight (#38BDF8) sculpting roof, beveled shoulders & satin floor
+    const azureSpot = new THREE.SpotLight(0x38bdf8, 18, 18, Math.PI / 4, 0.72, 1.3);
+    azureSpot.position.set(0, 7.6, 1.4);
+    azureSpot.target.position.set(0, 0.5, 0);
+    scene.add(azureSpot);
+    scene.add(azureSpot.target);
+
+    // Crisp cool-azure rear rim light separating the white roof contour from the #09090B backdrop
+    const rimLight = new THREE.DirectionalLight(0x38bdf8, 1.55);
+    rimLight.position.set(-3.8, 5.6, -5.2);
     scene.add(rimLight);
 
-    // Subtle front-right fill so the sliding door & interior seats read crisply
-    const fillLight = new THREE.DirectionalLight(0x94a3b8, 0.42);
-    fillLight.position.set(-3.2, 1.8, 5.8);
+    // Subtle front fill so the sliding door & interior seats read cleanly
+    const fillLight = new THREE.DirectionalLight(0xcbd5e1, 0.38);
+    fillLight.position.set(-3.2, 1.9, 5.8);
     scene.add(fillLight);
 
-    // Build Sculpted White 2008 VW Caravelle T5
-    const { vanGroup, slidingDoorGroup, doorHitTargets, cabinLight } = buildCaravelleT5();
+    // Add Sculpted 3D VW Caravelle T5
+    const {
+      vanGroup,
+      slidingDoorGroup,
+      doorHitTargets,
+      doorHandleHighlightMat,
+      cabinLight,
+    } = buildSculptedCaravelleT5();
     scene.add(vanGroup);
 
-    // Pointer parallax & Raycaster for clicking the 3D sliding door directly
+    // Pointer Parallax + Raycaster for Clicking the 3D Sliding Door Directly
     const raycaster = new THREE.Raycaster();
     const pointerNdc = new THREE.Vector2(99, 99);
     const pointerParallax = { x: 0, y: 0 };
@@ -548,6 +850,7 @@ export function Caravelle3DStage({
       if (hit !== isHovered) {
         isHovered = hit;
         renderer.domElement.style.cursor = hit ? 'pointer' : 'default';
+        doorHandleHighlightMat.emissiveIntensity = hit ? 2.6 : 1.35;
         onDoorHoverRef.current(hit);
       }
     };
@@ -574,13 +877,12 @@ export function Caravelle3DStage({
     };
     window.addEventListener('resize', handleResize);
 
-    // Animation state (critically damped spring-like exponential smoothing)
-    let doorProgress = 0; // 0 = closed, 1 = slid fully open along side rail
-    let overheadProgress = 0; // 0 = side profile, 1 = 90° overhead camera looking down into cabin
+    // Smooth critically damped animation state
+    let doorProgress = 0;
+    let overheadProgress = 0;
     let rafId = 0;
     let lastTime = performance.now();
-
-    const lookAtTarget = new THREE.Vector3(0, 0.92, 0);
+    const lookAtTarget = new THREE.Vector3(0, 0.9, 0);
 
     const animate = (now: number) => {
       const dt = Math.min(0.05, (now - lastTime) / 1000);
@@ -588,25 +890,25 @@ export function Caravelle3DStage({
 
       const phase = doorPhaseRef.current;
 
-      // 1. Real 3D Sliding Door Kinematics (pop out on +Z then slide backward along -X rail)
+      // 1. Real 3D Sliding Door Kinematics (pop out on +Z then slide smoothly backward along -X rail)
       const doorTarget = phase === 'closed' ? 0 : 1;
       doorProgress += (doorTarget - doorProgress) * Math.min(1, dt * 8.5);
 
       const popOut = Math.min(1, doorProgress * 3.2);
       const slideBack = Math.max(0, (doorProgress - 0.08) / 0.92);
-      slidingDoorGroup.position.set(-1.12 * slideBack, 0, 0.085 * popOut);
-      cabinLight.intensity = 1.4 + doorProgress * 2.4;
+      slidingDoorGroup.position.set(-1.1 * slideBack, 0, 0.08 * popOut);
+      cabinLight.intensity = 1.4 + doorProgress * 2.5;
 
-      // 2. Camera framing + Smooth 90° Overhead Transition into Act II
+      // 2. Smooth 90° Overhead Camera Transition into Act II
       const overheadTarget = phase === 'overhead' ? 1 : 0;
       overheadProgress += (overheadTarget - overheadProgress) * Math.min(1, dt * 4.4);
       const easedOverhead = 1 - Math.pow(1 - overheadProgress, 3);
 
       const baseDist = getIdleCameraDistance(camera.aspect);
-      const idleX = pointerParallax.x * 0.28 * (1 - easedOverhead);
-      const idleY = (camera.aspect < 1 ? 1.55 : 1.32) + pointerParallax.y * 0.12 * (1 - easedOverhead);
+      const idleX = pointerParallax.x * 0.25 * (1 - easedOverhead);
+      const idleY =
+        (camera.aspect < 1 ? 1.52 : 1.32) + pointerParallax.y * 0.1 * (1 - easedOverhead);
 
-      // Arc smoothly from side profile (z = baseDist, y = idleY) to 90° overhead (z = 0.08, y = 6.2)
       const camX = THREE.MathUtils.lerp(idleX, 0.0, easedOverhead);
       const camY = THREE.MathUtils.lerp(idleY, 6.2, easedOverhead);
       const camZ = THREE.MathUtils.lerp(baseDist, 0.08, easedOverhead);
@@ -633,6 +935,7 @@ export function Caravelle3DStage({
       pmremGenerator.dispose();
       envTex.dispose();
       contactTex.dispose();
+      azureGlowTex.dispose();
       roughnessTex.dispose();
       renderer.dispose();
       if (renderer.domElement.parentNode === container) {

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { ArrowRight, Compass, DoorOpen, Users } from 'lucide-react';
-import { CONTINUOUS_ROUTE, SKETCHFAB_T5_HERO_EMBED_URL } from '../data/routeData';
+import { CONTINUOUS_ROUTE } from '../data/routeData';
 import type { BookingsMap } from '../types/roadtrip';
 import { Caravelle3DStage } from './Caravelle3DStage';
 
@@ -12,8 +12,6 @@ interface ActOneExteriorProps {
   onJumpToTrailer: () => void;
 }
 
-const BACKDROP_URL = `${import.meta.env.BASE_URL}trentino-backdrop.jpg`;
-
 export function ActOneExterior({
   bookings,
   mySeatId,
@@ -21,8 +19,7 @@ export function ActOneExterior({
   onJumpToTrailer,
 }: ActOneExteriorProps) {
   const [doorPhase, setDoorPhase] = useState<'closed' | 'sliding' | 'overhead'>('closed');
-  const [useFallback3d, setUseFallback3d] = useState(false);
-  const [sketchfabLoaded, setSketchfabLoaded] = useState(false);
+  const [doorHovered, setDoorHovered] = useState(false);
   const prefersReducedMotion = useReducedMotion();
 
   const bookedCount = Object.keys(bookings).length;
@@ -38,91 +35,39 @@ export function ActOneExterior({
     setDoorPhase('sliding');
     window.setTimeout(() => {
       setDoorPhase('overhead');
-    }, 340);
+    }, 520);
     window.setTimeout(() => {
       onEnterCabin();
-    }, 820);
+    }, 1180);
   };
 
   return (
     <section
-      aria-label="Volkswagen Caravelle T5 3D — Trento Zagarolo"
+      aria-label="Studio 3D Volkswagen Caravelle T5 — Trento Zagarolo"
       className="relative h-[100dvh] w-full overflow-hidden select-none bg-[#09090B]"
       data-testid="act-one-exterior"
     >
-      {/* Continuous Transition Wrapper */}
+      {/* True Interactive 3D Dark Architectural Studio + Azure Focus Spotlight (Three.js) */}
       <motion.div
-        className="relative h-full w-full will-change-transform"
-        animate={
-          doorPhase === 'overhead'
-            ? { scale: 1.18, opacity: 0 }
-            : { scale: 1, opacity: 1 }
-        }
-        transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
+        className="absolute inset-0 h-full w-full"
+        animate={{ opacity: doorPhase === 'overhead' ? 0.14 : 1 }}
+        transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
       >
-        {/* 100% Real-World Photorealistic Italian Roadside & Asphalt Backdrop (CC0 DSLR) */}
-        <img
-          src={BACKDROP_URL}
-          alt="Strada collinare italiana in asfalto reale con terrazzamenti e luce diurna naturale"
-          data-testid="real-world-backdrop"
-          className="absolute inset-0 h-full w-full object-cover object-center"
-          draggable={false}
+        <Caravelle3DStage
+          doorPhase={doorPhase}
+          onDoorClick={triggerDoorOpen}
+          onDoorHoverChange={setDoorHovered}
         />
-
-        {/* Subtle Atmospheric Daylight Horizon Depth & Natural Ground Vignette */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#09090B]/55 via-transparent to-[#09090B]/90"
-        />
-
-        {/* Soft Ambient Occlusion Contact Shadow Grounding the 3D Caravelle onto the Real Asphalt */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 top-[60%] h-24 w-[78%] max-w-[780px] -translate-x-1/2 -translate-y-1/2 rounded-[50%] bg-black/65 blur-2xl sm:top-[61%] sm:h-28"
-        />
-
-        {/* Direct Official Sketchfab 3D VW Caravelle T5 (transparent=1) over Real-World Backdrop */}
-        {!useFallback3d ? (
-          <div className="absolute inset-x-0 top-[56px] bottom-[156px] z-10 flex items-center justify-center sm:top-[60px] sm:bottom-[136px]">
-            <iframe
-              title="Volkswagen T5 Caravelle 3D"
-              data-testid="sketchfab-hero-iframe"
-              src={SKETCHFAB_T5_HERO_EMBED_URL}
-              onLoad={() => {
-                window.setTimeout(() => setSketchfabLoaded(true), 2200);
-              }}
-              onError={() => setUseFallback3d(true)}
-              allow="autoplay; fullscreen; xr-spatial-tracking"
-              allowFullScreen
-              className={`h-full w-full border-0 bg-transparent transition-opacity duration-500 ${
-                sketchfabLoaded ? 'opacity-100' : 'opacity-0'
-              }`}
-            />
-
-            {/* Seamless Three.js White + Blue-Tinted-Glass Caravelle visible immediately while Sketchfab streams 3D textures */}
-            {!sketchfabLoaded && (
-              <div className="pointer-events-none absolute inset-0">
-                <Caravelle3DStage
-                  doorPhase={doorPhase}
-                  onDoorClick={triggerDoorOpen}
-                  onDoorHoverChange={() => {}}
-                />
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="absolute inset-x-0 top-[56px] bottom-[156px] z-10 sm:top-[60px] sm:bottom-[136px]">
-            <Caravelle3DStage
-              doorPhase={doorPhase}
-              onDoorClick={triggerDoorOpen}
-              onDoorHoverChange={() => {}}
-            />
-          </div>
-        )}
       </motion.div>
 
+      {/* Subtle Bottom Scrim for Sharp Editorial Legibility */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-52 bg-gradient-to-t from-[#09090B] via-[#09090B]/70 to-transparent"
+      />
+
       {/* Top Architectural Header Bar */}
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 border-b border-white/12 bg-[#09090B]/78 backdrop-blur-md">
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 border-b border-white/12 bg-[#09090B]/75 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-8">
           <div className="pointer-events-auto flex items-center gap-2.5 whitespace-nowrap">
             <span className="h-2 w-2 bg-[#10B981]" aria-hidden="true" />
@@ -130,7 +75,7 @@ export function ActOneExterior({
               VW CARAVELLE T5
             </span>
             <span className="hidden font-mono-telemetry text-xs text-[#A1A1AA] sm:inline">
-              / 2008 · 3D INTERATTIVO
+              / 2008 · STUDIO 3D
             </span>
           </div>
 
@@ -154,7 +99,7 @@ export function ActOneExterior({
               data-testid="quick-jump-route"
               className="tactile-btn inline-flex min-h-[38px] items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-xs font-semibold text-[#F8FAFC] hover:bg-white/10 sm:px-4"
             >
-              <Compass className="h-3.5 w-3.5 text-[#4285F4]" aria-hidden="true" />
+              <Compass className="h-3.5 w-3.5 text-[#38BDF8]" aria-hidden="true" />
               <span>Vedi percorso</span>
             </button>
           </nav>
@@ -162,7 +107,7 @@ export function ActOneExterior({
       </header>
 
       {/* Bottom Architectural Editorial Fold (Strict 100dvh) */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 border-t border-white/12 bg-[#09090B]/82 backdrop-blur-md">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 border-t border-white/12 bg-[#09090B]/78 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-8 sm:py-6">
           <div className="pointer-events-auto max-w-2xl">
             <h1 className="text-[30px] leading-[1.02] font-extrabold tracking-[-0.035em] text-[#F8FAFC] sm:text-[48px]">
@@ -201,12 +146,18 @@ export function ActOneExterior({
             >
               <DoorOpen className="h-4 w-4" aria-hidden="true" />
               <span>
-                {doorPhase === 'closed' ? 'Apri il portellone' : 'Ingresso in cabina…'}
+                {doorPhase === 'closed'
+                  ? 'Apri il portellone'
+                  : doorPhase === 'sliding'
+                    ? 'Apertura portellone…'
+                    : 'Ingresso in cabina…'}
               </span>
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </button>
             <p className="text-center text-xs text-[#A1A1AA] sm:text-right">
-              Ruota il modello 3D del Caravelle T5 oppure apri il portellone per scegliere il&nbsp;posto
+              {doorHovered
+                ? 'Clicca sul portellone 3D per aprirlo'
+                : 'Puoi anche cliccare direttamente sul portellone 3D del\u00A0Caravelle'}
             </p>
           </div>
         </div>

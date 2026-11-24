@@ -43,41 +43,48 @@ async function runFlowForViewport(browser, vp) {
   await page.goto(URL, { waitUntil: 'load', timeout: 30000 });
   await page.waitForTimeout(1800);
 
-  // 1. Verify Act I photorealistic real-world backdrop, Sketchfab 3D hero iframe, 8/8 DISPONIBILI, and zero overflow
+  // 1. Verify Act I Three.js 3D Studio Canvas, 0 Sketchfab references, 8/8 DISPONIBILI, and zero overflow
   const act1Check = await page.evaluate(() => {
-    const bg = document.querySelector('[data-testid="real-world-backdrop"]');
-    const iframe = document.querySelector('[data-testid="sketchfab-hero-iframe"]');
+    const canvas = document.querySelector('[data-testid="caravelle-3d-canvas"] canvas');
+    const rect = canvas ? canvas.getBoundingClientRect() : null;
     const avail = document.querySelector('[data-testid="hero-availability-badge"]')?.textContent || '';
+    const hasSketchfab = document.documentElement.innerHTML.toLowerCase().includes('sketchfab');
     return {
       overflowX: Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
-      backdropLoaded: Boolean(bg && bg.complete && bg.naturalWidth > 0),
-      sketchfabPresent: Boolean(iframe && iframe.getAttribute('src')?.includes('ee2e1e8000db4deabaf59bae97eddecf')),
+      canvasReady: Boolean(rect && rect.width > 200 && rect.height > 200),
+      hasSketchfab,
       avail,
     };
   });
   if (act1Check.overflowX > 0) {
     throw new Error(`[${vp.name}] Act I horizontal overflow: ${act1Check.overflowX}px`);
   }
-  if (!act1Check.backdropLoaded) {
-    throw new Error(`[${vp.name}] Real-world backdrop image failed to load!`);
+  if (!act1Check.canvasReady) {
+    throw new Error(`[${vp.name}] Three.js 3D studio canvas failed to mount!`);
   }
-  if (!act1Check.sketchfabPresent) {
-    throw new Error(`[${vp.name}] Sketchfab 3D hero iframe missing!`);
+  if (act1Check.hasSketchfab) {
+    throw new Error(`[${vp.name}] Found unexpected Sketchfab reference in Act I DOM!`);
   }
   if (!act1Check.avail.includes('8/8')) {
     throw new Error(`[${vp.name}] Expected 8/8 DISPONIBILI on fresh load, got: ${act1Check.avail}`);
   }
-  await page.screenshot({ path: path.join(outDir, `${vp.name}-01-act1-sketchfab-realworld.png`) });
+  await page.screenshot({ path: path.join(outDir, `${vp.name}-01-act1-azure-studio.png`) });
 
   // Trigger 3D sliding door + 90° overhead camera transition -> Act II
   await page.getByTestId('open-door-cta').click();
   await page.getByTestId('act-two-cabin').waitFor({ state: 'visible', timeout: 6000 });
   await page.waitForTimeout(400);
 
-  // 2. Verify NO POV box, exact front-row aisle gap, and ALL 8 seats start FREE
+  // 2. Verify NO POV box, NO Sketchfab button, exact front-row aisle gap, and ALL 8 seats start FREE
   const povCount = await page.getByTestId('seat-pov-preview').count();
+  const cabinHasSketchfab = await page.evaluate(() =>
+    document.documentElement.innerHTML.toLowerCase().includes('sketchfab')
+  );
   if (povCount !== 0) {
     throw new Error(`[${vp.name}] Right-side POV box should be removed, found ${povCount}`);
+  }
+  if (cabinHasSketchfab) {
+    throw new Error(`[${vp.name}] Found unexpected Sketchfab reference in Act II DOM!`);
   }
   const aisleVisible = await page.getByTestId('front-row-aisle').isVisible();
   if (!aisleVisible) {
@@ -96,12 +103,6 @@ async function runFlowForViewport(browser, vp) {
       throw new Error(`[${vp.name}] Seat ${id} should start FREE, not occupied!`);
     }
   }
-
-  // Verify Sketchfab "Modello 3D" toggle opens & closes cleanly
-  await page.getByTestId('toggle-3d-model-btn').click();
-  await page.getByTestId('sketchfab-3d-panel').waitFor({ state: 'visible', timeout: 3000 });
-  await page.getByTestId('toggle-3d-model-btn').click();
-  await page.waitForTimeout(200);
 
   // Select F2 -> verify emerald green selection
   await page.getByTestId('seat-btn-F2').click();
