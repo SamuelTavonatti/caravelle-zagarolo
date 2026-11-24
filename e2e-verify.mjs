@@ -40,30 +40,34 @@ async function runFlowForViewport(browser, vp) {
     }
   });
 
-  await page.goto(URL, { waitUntil: 'networkidle', timeout: 30000 });
-  await page.waitForTimeout(550);
+  await page.goto(URL, { waitUntil: 'load', timeout: 30000 });
+  await page.waitForTimeout(1800);
 
-  // 1. Verify Act I Three.js 3D WebGL canvas, 8/8 DISPONIBILI, and zero overflow
+  // 1. Verify Act I photorealistic real-world backdrop, Sketchfab 3D hero iframe, 8/8 DISPONIBILI, and zero overflow
   const act1Check = await page.evaluate(() => {
-    const canvas = document.querySelector('[data-testid="caravelle-3d-canvas"] canvas');
-    const rect = canvas ? canvas.getBoundingClientRect() : null;
+    const bg = document.querySelector('[data-testid="real-world-backdrop"]');
+    const iframe = document.querySelector('[data-testid="sketchfab-hero-iframe"]');
     const avail = document.querySelector('[data-testid="hero-availability-badge"]')?.textContent || '';
     return {
       overflowX: Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
-      canvasReady: Boolean(rect && rect.width > 200 && rect.height > 200),
+      backdropLoaded: Boolean(bg && bg.complete && bg.naturalWidth > 0),
+      sketchfabPresent: Boolean(iframe && iframe.getAttribute('src')?.includes('ee2e1e8000db4deabaf59bae97eddecf')),
       avail,
     };
   });
   if (act1Check.overflowX > 0) {
     throw new Error(`[${vp.name}] Act I horizontal overflow: ${act1Check.overflowX}px`);
   }
-  if (!act1Check.canvasReady) {
-    throw new Error(`[${vp.name}] Three.js 3D canvas failed to mount!`);
+  if (!act1Check.backdropLoaded) {
+    throw new Error(`[${vp.name}] Real-world backdrop image failed to load!`);
+  }
+  if (!act1Check.sketchfabPresent) {
+    throw new Error(`[${vp.name}] Sketchfab 3D hero iframe missing!`);
   }
   if (!act1Check.avail.includes('8/8')) {
     throw new Error(`[${vp.name}] Expected 8/8 DISPONIBILI on fresh load, got: ${act1Check.avail}`);
   }
-  await page.screenshot({ path: path.join(outDir, `${vp.name}-01-act1-3d-studio.png`) });
+  await page.screenshot({ path: path.join(outDir, `${vp.name}-01-act1-sketchfab-realworld.png`) });
 
   // Trigger 3D sliding door + 90° overhead camera transition -> Act II
   await page.getByTestId('open-door-cta').click();
@@ -166,6 +170,10 @@ async function runFlowForViewport(browser, vp) {
   const navTelemetry = await page.evaluate(() => window.__CARAVELLE_NAV_TELEMETRY__);
   if (!navTelemetry || navTelemetry.maxBearingDelta > 10) {
     throw new Error(`[${vp.name}] Unstable camera bearing: ${JSON.stringify(navTelemetry)}`);
+  }
+  const [startLng, startLat] = navTelemetry.startCoordinate || [];
+  if (Math.abs(startLng - 11.12779748962075) > 1e-6 || Math.abs(startLat - 46.05847124366229) > 1e-6) {
+    throw new Error(`[${vp.name}] Exact start coordinate mismatch: ${JSON.stringify(navTelemetry.startCoordinate)}`);
   }
 
   // 4. Return to cabin, switch F2 -> R3, then release back to 8/8 DISPONIBILI

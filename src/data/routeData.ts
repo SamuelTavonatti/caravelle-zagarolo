@@ -1,8 +1,13 @@
 import continuousRoute from './osrm_continuous.json';
 import type { RouteStop, SeatDefinition, SeatId } from '../types/roadtrip';
 
+export const EXACT_START_COORDINATE: [number, number] = [11.12779748962075, 46.05847124366229];
+
 export const SKETCHFAB_T5_EMBED_URL =
   'https://sketchfab.com/models/ee2e1e8000db4deabaf59bae97eddecf/embed?autostart=1&ui_theme=dark';
+
+export const SKETCHFAB_T5_HERO_EMBED_URL =
+  'https://sketchfab.com/models/ee2e1e8000db4deabaf59bae97eddecf/embed?autostart=1&preload=1&transparent=1&ui_infos=0&ui_controls=1&ui_watermark=0&ui_hint=0';
 
 export const SEATS: SeatDefinition[] = [
   {
@@ -117,13 +122,15 @@ export const PICKUP_QUICK_CHIPS: string[] = [
 
 export interface ContinuousOsrmRoute {
   totalDistanceKm: number;
+  startCoordinate: [number, number];
   stopIndices: number[];
   stopKm: number[];
   legDistancesKm: number[];
   coordinates: [number, number][];
 }
 
-export const CONTINUOUS_ROUTE: ContinuousOsrmRoute = continuousRoute as ContinuousOsrmRoute;
+export const CONTINUOUS_ROUTE: ContinuousOsrmRoute =
+  continuousRoute as unknown as ContinuousOsrmRoute;
 
 export const ROUTE_STOPS: RouteStop[] = [
   {

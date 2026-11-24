@@ -87,21 +87,21 @@ function buildCaravelleT5(): {
   });
 
   const tintedGlass = new THREE.MeshPhysicalMaterial({
-    color: 0x0c1118,
+    color: 0x163d5c,
     roughness: 0.08,
-    metalness: 0.1,
-    transmission: 0.18,
+    metalness: 0.14,
+    transmission: 0.22,
     transparent: true,
-    opacity: 0.88,
+    opacity: 0.86,
     clearcoat: 1.0,
   });
 
   const clearWindshield = new THREE.MeshPhysicalMaterial({
-    color: 0x182230,
+    color: 0x1e4e73,
     roughness: 0.06,
-    metalness: 0.08,
+    metalness: 0.1,
     transparent: true,
-    opacity: 0.62,
+    opacity: 0.65,
     clearcoat: 1.0,
   });
 
@@ -443,7 +443,7 @@ export function Caravelle3DStage({
     try {
       renderer = new THREE.WebGLRenderer({
         antialias: true,
-        alpha: false,
+        alpha: true,
         powerPreference: 'high-performance',
       });
     } catch {
@@ -452,17 +452,16 @@ export function Caravelle3DStage({
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setClearColor(0x000000, 0);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.94;
+    renderer.toneMappingExposure = 1.0;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x09090b);
-    scene.fog = new THREE.Fog(0x09090b, 14, 34);
 
-    // Studio Reflection Environment (PMREM) for glossy pearl-white clearcoat & glass reflections
+    // Daylight Environment Reflections (PMREM) for glossy pearl-white clearcoat & blue-tinted glass
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     const envTex = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
     scene.environment = envTex;
@@ -475,37 +474,11 @@ export function Caravelle3DStage({
     );
 
     const getIdleCameraDistance = (aspect: number) => {
-      // Automatically adapt distance so full 4.9m van fits completely uncropped on desktop & mobile portrait
       return aspect < 1 ? Math.min(20.5, 9.2 / Math.max(0.42, aspect)) : 8.2;
     };
 
-    // =========================================================================
-    // STUDIO ASPHALT FLOOR + SOFT CONTACT SHADOW
-    // =========================================================================
+    // Soft ambient occlusion contact shadow directly under the VW Caravelle T5 on the real road
     const roughnessTex = createAsphaltRoughnessTexture();
-    const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x0b0c10,
-      roughness: 0.84,
-      roughnessMap: roughnessTex,
-      metalness: 0.12,
-    });
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(56, 56), floorMat);
-    floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = true;
-    scene.add(floor);
-
-    // Subtle architectural studio horizon grid line on asphalt
-    const lineMat = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.12,
-    });
-    const roadEdgeLine = new THREE.Mesh(new THREE.PlaneGeometry(42, 0.04), lineMat);
-    roadEdgeLine.rotation.x = -Math.PI / 2;
-    roadEdgeLine.position.set(0, 0.004, 1.75);
-    scene.add(roadEdgeLine);
-
-    // Soft contact shadow directly under the VW Caravelle T5
     const contactTex = createContactShadowTexture();
     const contactShadow = new THREE.Mesh(
       new THREE.PlaneGeometry(5.6, 2.55),

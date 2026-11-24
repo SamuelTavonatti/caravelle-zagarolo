@@ -214,6 +214,7 @@ function formatEtaRemaining(remainingKm: number): string {
 declare global {
   interface Window {
     __CARAVELLE_NAV_TELEMETRY__?: {
+      startCoordinate: [number, number];
       maxBearingDelta: number;
       currentBearing: number;
       kmCovered: number;
@@ -289,6 +290,7 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
     if (!container) return;
 
     window.__CARAVELLE_NAV_TELEMETRY__ = {
+      startCoordinate: CONTINUOUS_ROUTE.coordinates[0],
       maxBearingDelta: 0,
       currentBearing: initialHeading,
       kmCovered: 0,
