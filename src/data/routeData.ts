@@ -108,7 +108,7 @@ export const SEAT_MAP: Record<SeatId, SeatDefinition> = Object.fromEntries(
 ) as Record<SeatId, SeatDefinition>;
 
 export const PICKUP_QUICK_CHIPS: string[] = [
-  'Via Cocciadoro 1, Trento',
+  'Via Gocciadoro 1, Trento',
   "Via Torre Vanga (Joy's), Trento",
   'Pomarolo (TN)',
   'Riva del Garda (TN)',
@@ -129,8 +129,8 @@ export const ROUTE_STOPS: RouteStop[] = [
   {
     id: 'partenza',
     badge: 'PARTENZA',
-    title: 'Via Cocciadoro 1, Trento',
-    subtitle: 'Avvio navigazione · VW Caravelle T5',
+    title: 'Via Gocciadoro 1, Trento',
+    subtitle: 'Arancia e Rosmarino · Partenza VW Caravelle T5',
     coordinates: CONTINUOUS_ROUTE.coordinates[CONTINUOUS_ROUTE.stopIndices[0]],
     zoom: 16.5,
     pitch: 58,
@@ -223,12 +223,12 @@ export const CONTINUOUS_LEGS: ContinuousLegMeta[] = [
   {
     id: 'leg-1',
     label: 'Trento centro',
-    roadBadge: 'Via Cocciadoro → Via Torre Vanga',
+    roadBadge: 'Via Gocciadoro → Via Torre Vanga',
     startKm: CONTINUOUS_ROUTE.stopKm[0],
     endKm: CONTINUOUS_ROUTE.stopKm[1],
-    durationSec: 3.8,
-    cruiseKmh: 38,
-    zoom: 16.4,
+    durationSec: 4.0,
+    cruiseKmh: 40,
+    zoom: 16.2,
     pitch: 58,
   },
   {

@@ -56,7 +56,7 @@ export function BlackCurtain({
           className="inline-flex items-center gap-2 rounded-[2px] border border-white/15 bg-[#09090B] px-3 py-1.5 font-mono-telemetry text-xs font-medium tracking-[0.06em] uppercase text-[#A1A1AA]"
         >
           <Route className="h-3.5 w-3.5 text-[#4285F4]" aria-hidden="true" />
-          <span>738 KM · A22 → A1 → A14</span>
+          <span>707 KM · A22 → A1 → A14</span>
         </motion.div>
 
         <motion.h1

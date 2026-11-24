@@ -10,28 +10,11 @@ import {
 import type { BookingInput, BookingsMap, SeatBooking, SeatId } from '../types/roadtrip';
 
 const CLIENT_TOKEN_KEY = 'caravelle_t5_client_token_v1';
-const LOCAL_BOOKINGS_KEY = 'caravelle_t5_bookings_v1';
-const BROADCAST_CHANNEL_NAME = 'caravelle_t5_sync_v1';
+const LOCAL_BOOKINGS_KEY = 'caravelle_t5_bookings_v2';
+const BROADCAST_CHANNEL_NAME = 'caravelle_t5_sync_v2';
 const COLLECTION_PATH = 'trips/trento-zagarolo/seats';
 
-const SEEDED_LOCAL_BOOKINGS: BookingsMap = {
-  M1: {
-    seatId: 'M1',
-    firstName: 'Dani',
-    lastName: 'Rossi',
-    pickupLocation: "Via Torre Vanga (Joy's), Trento",
-    clientToken: 'seed-participant-dani',
-    updatedAt: 1732450000000,
-  },
-  R2: {
-    seatId: 'R2',
-    firstName: 'Taio',
-    lastName: 'Bianchi',
-    pickupLocation: 'Cesena (FC)',
-    clientToken: 'seed-participant-taio',
-    updatedAt: 1732450060000,
-  },
-};
+const SEEDED_LOCAL_BOOKINGS: BookingsMap = {};
 
 export type SyncMode = 'firebase' | 'local';
 

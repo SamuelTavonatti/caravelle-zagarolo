@@ -244,7 +244,7 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
     activeStopIndex: 0,
     badge: ROUTE_STOPS[0].badge,
     title: ROUTE_STOPS[0].title,
-    roadBadge: 'Via Cocciadoro 1, Trento',
+    roadBadge: 'Via Gocciadoro 1, Trento',
     overlayText: null as string | null,
     isHighwayBurst: false,
     kmCovered: 0,
@@ -489,7 +489,7 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
       let activeStopIndex = 0;
       let badge = ROUTE_STOPS[0].badge;
       let title = ROUTE_STOPS[0].title;
-      let roadBadge = 'Via Cocciadoro 1, Trento';
+      let roadBadge = 'Via Gocciadoro 1, Trento';
       let overlayText: string | null = null;
       let isHighwayBurst = false;
       let speedKmh = 0;
@@ -899,7 +899,7 @@ export function ActThreeTrailer({ onBackToCabin }: ActThreeTrailerProps) {
               </h1>
 
               <p className="mx-auto mt-4 max-w-xl text-sm text-[#A1A1AA] sm:text-base">
-                Da Via Cocciadoro 1 a Trento fino a Zagarolo, passando per Torre Vanga,
+                Da Via Gocciadoro 1 a Trento fino a Zagarolo, passando per Torre Vanga,
                 Pomarolo, Riva del Garda e&nbsp;Cesena.
               </p>
 
