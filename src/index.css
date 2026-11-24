@@ -1,0 +1,143 @@
+@import "tailwindcss";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+@layer base {
+  :root {
+    --canvas-obsidian: #090b0e;
+    --curtain-black: #050507;
+    --surface-container: #11151b;
+    --surface-elevated: #181e27;
+    --ink-primary: #f5f6f8;
+    --ink-secondary: #a4aebc;
+    --ink-muted: #7d8796;
+    --accent-emerald: #10b981;
+    --accent-emerald-hover: #059669;
+    --accent-gold: #e5b769;
+    --border-hairline: rgba(255, 255, 255, 0.09);
+  }
+
+  html {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--canvas-obsidian);
+    color: var(--ink-primary);
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    background-color: var(--canvas-obsidian);
+    color: var(--ink-primary);
+  }
+
+  ::selection {
+    background-color: rgba(16, 185, 129, 0.28);
+    color: #f5f6f8;
+  }
+
+  /* Precision keyboard-only focus rings */
+  :focus {
+    outline: none;
+  }
+
+  :focus-visible {
+    outline: 2px solid #10b981;
+    outline-offset: 2px;
+  }
+
+  /* Custom dark scrollbars */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #090b0e;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #232b38;
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #334052;
+  }
+}
+
+.font-mono-telemetry {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.glass-dark {
+  background: rgba(13, 16, 22, 0.78);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.14),
+    0 20px 50px -15px rgba(0, 0, 0, 0.6);
+}
+
+.glass-daylight {
+  background: rgba(16, 19, 25, 0.62);
+  backdrop-filter: blur(20px) saturate(175%);
+  -webkit-backdrop-filter: blur(20px) saturate(175%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
+    0 18px 42px -12px rgba(10, 12, 16, 0.5);
+}
+
+/* Tactile press response — keep color & fill atomic on the same frame */
+.tactile-btn {
+  transition:
+    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 120ms ease,
+    box-shadow 140ms ease;
+}
+
+.tactile-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tactile-lift:hover:not(:disabled) {
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass-dark,
+  .glass-daylight {
+    background: #11151b;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+}
+
+/* MapLibre attribution compact styling */
+.maplibregl-ctrl-attrib {
+  background: rgba(9, 11, 14, 0.65) !important;
+  color: #a4aebc !important;
+  backdrop-filter: blur(10px);
+  font-size: 10px !important;
+  border-radius: 9999px !important;
+  padding: 2px 8px !important;
+  margin: 0 10px 10px 0 !important;
+}
+
+.maplibregl-ctrl-attrib a {
+  color: #f5f6f8 !important;
+}

@@ -1,0 +1,288 @@
+import rawLegs from './osrm_legs.json';
+import type { RouteLeg, RouteStop, SeatDefinition, SeatId } from '../types/roadtrip';
+
+export const SEATS: SeatDefinition[] = [
+  {
+    id: 'F1',
+    row: 'front',
+    rowLabel: 'Prima fila',
+    positionLabel: 'Panca anteriore · Centro',
+    shortNote: 'Vista panoramica sul parabrezza e plancia',
+    povTitle: 'Plancia anteriore e strada davanti',
+    povDescription:
+      'Visuale diretta dal posto centrale davanti: cruscotto T5, cambio rialzato e tutta la vallata davanti al parabrezza.',
+    windowSide: 'center',
+    panOffset: -0.35,
+  },
+  {
+    id: 'F2',
+    row: 'front',
+    rowLabel: 'Prima fila',
+    positionLabel: 'Panca anteriore · Finestrino destro',
+    shortNote: 'Copilota sul finestrino e navigazione',
+    povTitle: 'Posto copilota sul finestrino destro',
+    povDescription:
+      'Luce piena dal parabrezza e dal finestrino laterale destro, controllo diretto di musica, mappa e soste lungo la via.',
+    windowSide: 'right',
+    panOffset: 0.45,
+  },
+  {
+    id: 'M1',
+    row: 'middle',
+    rowLabel: 'Seconda fila',
+    positionLabel: 'Fila centrale · Finestrino sinistro',
+    shortNote: 'Spazio gambe generoso lato sinistro',
+    povTitle: 'Seconda fila · Scorcio laterale e portellone',
+    povDescription:
+      'Posizione rialzata con ampio spazio per le gambe, finestrino panoramico sinistro e vista obliqua sul portellone aperto.',
+    windowSide: 'left',
+    panOffset: -0.5,
+  },
+  {
+    id: 'M2',
+    row: 'middle',
+    rowLabel: 'Seconda fila',
+    positionLabel: 'Fila centrale · Centro cabina',
+    shortNote: 'Cuore della conversazione a bordo',
+    povTitle: 'Seconda fila · Al centro della cabina',
+    povDescription:
+      'Al centro esatto del Caravelle, perfetto per chiacchierare con chi guida e godersi la luce dal portellone scorrevole.',
+    windowSide: 'center',
+    panOffset: 0,
+  },
+  {
+    id: 'M3',
+    row: 'middle',
+    rowLabel: 'Seconda fila',
+    positionLabel: 'Fila centrale · Lato portellone',
+    shortNote: 'Accesso diretto al portellone scorrevole',
+    povTitle: 'Seconda fila · Affaccio sul portellone aperto',
+    povDescription:
+      'Il posto più rapido per salire e scendere alle tappe, con affaccio diretto sulle colline fuori dal portellone laterale.',
+    windowSide: 'right',
+    panOffset: 0.55,
+  },
+  {
+    id: 'R1',
+    row: 'rear',
+    rowLabel: 'Terza fila',
+    positionLabel: 'Panca posteriore · Finestrino sinistro',
+    shortNote: 'Relax e ampia vetratura panoramica',
+    povTitle: 'Terza fila · Panorama cabina e vetri posteriori',
+    povDescription:
+      'Vista completa sull’intero abitacolo del Caravelle e grandi vetrate posteriori ideali per riposare lungo l’A14.',
+    windowSide: 'left',
+    panOffset: -0.5,
+  },
+  {
+    id: 'R2',
+    row: 'rear',
+    rowLabel: 'Terza fila',
+    positionLabel: 'Panca posteriore · Centro',
+    shortNote: 'Sguardo profondo su tutta la cabina',
+    povTitle: 'Terza fila · Prospettiva longitudinale',
+    povDescription:
+      'Seduta morbida in fondo alla cabina con prospettiva aperta tra i poggiatesta fino al parabrezza anteriore.',
+    windowSide: 'center',
+    panOffset: 0,
+  },
+  {
+    id: 'R3',
+    row: 'rear',
+    rowLabel: 'Terza fila',
+    positionLabel: 'Panca posteriore · Finestrino destro',
+    shortNote: 'Luce dorata e vista ampia a destra',
+    povTitle: 'Terza fila · Vetratura panoramica destra',
+    povDescription:
+      'Angolo riservato con luce calda di traverso, vista libera sul paesaggio appenninico e bagagliaio subito alle spalle.',
+    windowSide: 'right',
+    panOffset: 0.5,
+  },
+];
+
+export const SEAT_MAP: Record<SeatId, SeatDefinition> = Object.fromEntries(
+  SEATS.map((s) => [s.id, s])
+) as Record<SeatId, SeatDefinition>;
+
+export const PICKUP_QUICK_CHIPS: string[] = [
+  'Via Cocciadoro 1, Trento',
+  "Via Torre Vanga (Joy's), Trento",
+  'Pomarolo (TN)',
+  'Riva del Garda (TN)',
+  'Cesena (FC)',
+];
+
+export const ROUTE_STOPS: RouteStop[] = [
+  {
+    id: 'partenza',
+    badge: 'Partenza',
+    title: 'Via Cocciadoro 1, Trento',
+    subtitle: 'Motore acceso · Caravelle T5 bianco pronto a partire',
+    coordinates: [11.1211, 46.0748],
+    zoom: 16.4,
+    pitch: 62,
+    kmFromStart: 0,
+  },
+  {
+    id: 'tappa-1',
+    badge: 'Tappa 1',
+    title: "Via Torre Vanga · Piazza Dante (Joy's), Trento",
+    subtitle: 'Sosta rapida in centro a Trento',
+    overlayText: 'Si prende Dani',
+    coordinates: [11.1194, 46.0706],
+    zoom: 16.6,
+    pitch: 62,
+    kmFromStart: 0.6,
+  },
+  {
+    id: 'tappa-2',
+    badge: 'Tappa 2',
+    title: 'Pomarolo (TN)',
+    subtitle: 'Discesa lungo la Vallagarina',
+    overlayText: 'Si prende Arianna',
+    coordinates: [11.0447, 45.9286],
+    zoom: 14.5,
+    pitch: 60,
+    kmFromStart: 27.4,
+  },
+  {
+    id: 'tappa-3',
+    badge: 'Tappa 3',
+    title: 'Riva del Garda (TN)',
+    subtitle: 'Affaccio sull’alto Garda',
+    overlayText: 'Si prendono Eleonora e Mattia',
+    coordinates: [10.8412, 45.8858],
+    zoom: 14.4,
+    pitch: 60,
+    kmFromStart: 54.2,
+  },
+  {
+    id: 'autostrada',
+    badge: 'Ingresso in Autostrada',
+    title: 'Casello Rovereto Sud · A22 → A1 → A14',
+    subtitle: 'Immissione sul corridoio autostradale verso sud',
+    overlayText: 'Ingresso in Autostrada · A22 → A1 → A14',
+    coordinates: [11.0078, 45.8569],
+    isHighwayEntry: true,
+    zoom: 13.8,
+    pitch: 64,
+    kmFromStart: 75.3,
+  },
+  {
+    id: 'tappa-4',
+    badge: 'Tappa 4',
+    title: 'Cesena (FC)',
+    subtitle: 'Uscita A14 Adriatica · Romagna',
+    overlayText: 'Si prende Taio',
+    coordinates: [12.2432, 44.1396],
+    zoom: 13.8,
+    pitch: 60,
+    kmFromStart: 379.8,
+  },
+  {
+    id: 'arrivo',
+    badge: 'Arrivo',
+    title: 'Zagarolo (RM)',
+    subtitle: 'Alle porte di Roma · Destinazione raggiunta',
+    overlayText: 'Ben arrivati a Roma',
+    coordinates: [12.8317, 41.8403],
+    isFinale: true,
+    zoom: 14.6,
+    pitch: 60,
+    kmFromStart: 737.7,
+  },
+];
+
+type RawLegKey = 'leg1' | 'leg2' | 'leg3' | 'leg4' | 'leg5' | 'leg6';
+const typedRaw = rawLegs as Record<
+  RawLegKey,
+  { distanceKm: number; durationMin: number; coordinates: [number, number][] }
+>;
+
+export const ROUTE_LEGS: RouteLeg[] = [
+  {
+    id: 'leg-1',
+    fromStopId: 'partenza',
+    toStopId: 'tappa-1',
+    label: 'Centro storico di Trento',
+    roadBadge: 'Via Cocciadoro → Via Torre Vanga',
+    coordinates: typedRaw.leg1.coordinates,
+    distanceKm: typedRaw.leg1.distanceKm,
+    durationSec: 4.0,
+    cruiseKmh: 38,
+    zoom: 16.4,
+    pitch: 62,
+  },
+  {
+    id: 'leg-2',
+    fromStopId: 'tappa-1',
+    toStopId: 'tappa-2',
+    label: 'Verso Pomarolo',
+    roadBadge: 'SS12 · Vallagarina',
+    coordinates: typedRaw.leg2.coordinates,
+    distanceKm: typedRaw.leg2.distanceKm,
+    durationSec: 4.6,
+    cruiseKmh: 84,
+    zoom: 12.8,
+    pitch: 60,
+  },
+  {
+    id: 'leg-3',
+    fromStopId: 'tappa-2',
+    toStopId: 'tappa-3',
+    label: 'Discesa verso il Lago di Garda',
+    roadBadge: 'SS240 · Passo San Giovanni',
+    coordinates: typedRaw.leg3.coordinates,
+    distanceKm: typedRaw.leg3.distanceKm,
+    durationSec: 4.8,
+    cruiseKmh: 76,
+    zoom: 12.6,
+    pitch: 61,
+  },
+  {
+    id: 'leg-4',
+    fromStopId: 'tappa-3',
+    toStopId: 'autostrada',
+    label: 'Verso il Casello A22',
+    roadBadge: 'Riva → Casello Rovereto Sud',
+    coordinates: typedRaw.leg4.coordinates,
+    distanceKm: typedRaw.leg4.distanceKm,
+    durationSec: 4.2,
+    cruiseKmh: 92,
+    zoom: 13.0,
+    pitch: 63,
+    isHighwaySegment: true,
+  },
+  {
+    id: 'leg-5',
+    fromStopId: 'autostrada',
+    toStopId: 'tappa-4',
+    label: 'Corridoio Autostradale Sud',
+    roadBadge: 'A22 Brennero → A1 → A14 Adriatica',
+    coordinates: typedRaw.leg5.coordinates,
+    distanceKm: typedRaw.leg5.distanceKm,
+    durationSec: 6.4,
+    cruiseKmh: 130,
+    zoom: 9.6,
+    pitch: 62,
+    isHighwaySegment: true,
+  },
+  {
+    id: 'leg-6',
+    fromStopId: 'tappa-4',
+    toStopId: 'arrivo',
+    label: 'Direzione Roma · Zagarolo',
+    roadBadge: 'E45 → A1 → Roma Est → Zagarolo',
+    coordinates: typedRaw.leg6.coordinates,
+    distanceKm: typedRaw.leg6.distanceKm,
+    durationSec: 6.2,
+    cruiseKmh: 126,
+    zoom: 9.8,
+    pitch: 60,
+    isHighwaySegment: true,
+  },
+];
+
+export const FULL_ROUTE_COORDINATES: [number, number][] = ROUTE_LEGS.flatMap((leg, idx) =>
+  idx === 0 ? leg.coordinates : leg.coordinates.slice(1)
+);
