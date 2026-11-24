@@ -180,25 +180,51 @@ export function Caravelle3DStage({
     blob.position.y = 0.016;
     scene.add(blob);
 
+    // Soft atmospheric headlight beam haze extending gently to the right (+X)
+    const beamCanvas = document.createElement('canvas');
+    beamCanvas.width = 512;
+    beamCanvas.height = 256;
+    const bctx = beamCanvas.getContext('2d')!;
+    bctx.save();
+    bctx.translate(180, 128);
+    bctx.scale(1.6, 0.75);
+    const bg = bctx.createRadialGradient(0, 0, 10, 0, 0, 185);
+    bg.addColorStop(0, 'rgba(186,230,253,0.38)');
+    bg.addColorStop(0.45, 'rgba(56,189,248,0.16)');
+    bg.addColorStop(1, 'rgba(14,165,233,0)');
+    bctx.fillStyle = bg;
+    bctx.beginPath();
+    bctx.arc(0, 0, 185, 0, Math.PI * 2);
+    bctx.fill();
+    bctx.restore();
+    const beamTex = new THREE.CanvasTexture(beamCanvas);
+    beamTex.colorSpace = THREE.SRGBColorSpace;
+    const beam = new THREE.Mesh(
+      new THREE.PlaneGeometry(4.6, 2.4),
+      new THREE.MeshBasicMaterial({
+        map: beamTex,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        fog: false,
+      })
+    );
+    beam.position.set(4.15, 0.96, -0.45);
+    scene.add(beam);
+
     // Lighting
-    scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x0b0d12, 0.2));
-    const key = new THREE.DirectionalLight(0xffffff, 2.2);
+    scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x0b0d12, 0.25));
+    const key = new THREE.DirectionalLight(0xffffff, 2.25);
     key.position.set(-3, 9, 6);
-    key.shadow.mapSize.set(1024, 1024);
-    key.shadow.camera.left = -4.5;
-    key.shadow.camera.right = 4.5;
-    key.shadow.camera.top = 4;
-    key.shadow.camera.bottom = -4;
-    key.shadow.bias = -0.0004;
     scene.add(key);
-    const rim = new THREE.DirectionalLight(0x7dd3fc, 1.4);
+    const rim = new THREE.DirectionalLight(0x7dd3fc, 1.35);
     rim.position.set(6, 3, -5);
     scene.add(rim);
-    const underGlow = new THREE.PointLight(0x38bdf8, 1.6, 5, 1.8);
+    const underGlow = new THREE.PointLight(0x38bdf8, 1.5, 5, 1.8);
     underGlow.position.set(0, 0.18, 0);
     scene.add(underGlow);
-    const cabinLight = new THREE.PointLight(0xfff4e0, 0.6, 4.2, 1.6);
-    cabinLight.position.set(-0.2, 1.7, 0);
+    const cabinLight = new THREE.PointLight(0xfff4e0, 0.85, 4.5, 1.6);
+    cabinLight.position.set(-0.2, 1.68, 0.15);
     scene.add(cabinLight);
 
     let disposed = false;
@@ -224,7 +250,7 @@ export function Caravelle3DStage({
       })
       .catch(() => container.setAttribute('data-glb', 'error'));
 
-    const doorCenter = new THREE.Vector3(0.05, 1.1, 0.95);
+    const doorCenter = new THREE.Vector3(-0.1, 1.05, 0.94);
     window.__CARAVELLE_STAGE__ = {
       doorScreen: () => {
         const v = doorCenter.clone().project(camera);

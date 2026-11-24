@@ -68,7 +68,6 @@ function makeMaterials(): Record<string, THREE.Material> {
   return {
     Body: paint(),
     SlidingDoor: paint(),
-    Mirrors: paint(),
     GlassCab: glass(),
     GlassDoor: glass(),
     GlassRear: glass(),
@@ -88,40 +87,45 @@ function makeMaterials(): Record<string, THREE.Material> {
     Bumpers: new THREE.MeshPhysicalMaterial({ color: 0x1b1d22, roughness: 0.65, metalness: 0.08 }),
     Grille: rubber(0x07080a, 0.6),
     Headlights: new THREE.MeshPhysicalMaterial({
-      color: 0xf0f6ff,
-      roughness: 0.05,
+      color: 0xdce6f2,
+      roughness: 0.06,
+      metalness: 0.15,
       clearcoat: 1,
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.88,
       emissive: 0x9fb4c8,
-      emissiveIntensity: 0.25,
+      emissiveIntensity: 0.22,
     }),
+    HeadlightHousing: new THREE.MeshStandardMaterial({ color: 0x1e222b, roughness: 0.35, metalness: 0.35 }),
     DRL: new THREE.MeshBasicMaterial({ color: 0xffffff }),
     Taillights: new THREE.MeshStandardMaterial({
-      color: 0xb3121b,
-      roughness: 0.15,
+      color: 0xb91c1c,
+      roughness: 0.16,
       emissive: 0xdc2626,
-      emissiveIntensity: 0.5,
+      emissiveIntensity: 0.45,
     }),
-    MirrorGlass: new THREE.MeshStandardMaterial({ color: 0x1a1d22, roughness: 0.1, metalness: 0.6 }),
-    Handles: rubber(0x0f1115, 0.6),
+    Repeater: new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.25, metalness: 0.5 }),
+    Mirrors: new THREE.MeshStandardMaterial({ color: 0x1a1d23, roughness: 0.58, metalness: 0.08 }),
+    MirrorGlass: new THREE.MeshStandardMaterial({ color: 0x2b303a, roughness: 0.1, metalness: 0.7 }),
+    Handles: rubber(0x111318, 0.55),
     DoorHandle: new THREE.MeshStandardMaterial({
-      color: 0x0f1115,
-      roughness: 0.6,
+      color: 0x111318,
+      roughness: 0.55,
       metalness: 0.1,
       emissive: 0x7dd3fc,
       emissiveIntensity: 0,
     }),
-    Badge: new THREE.MeshStandardMaterial({ color: 0xe8edf3, metalness: 1, roughness: 0.1 }),
-    Wheels: rubber(0x15161a, 0.72),
-    Rims: new THREE.MeshStandardMaterial({ color: 0xd5dce5, metalness: 0.75, roughness: 0.28, envMapIntensity: 1.8 }),
-    Brakes: new THREE.MeshStandardMaterial({ color: 0x6b7078, metalness: 0.8, roughness: 0.4 }),
-    Calipers: new THREE.MeshStandardMaterial({ color: 0xc2410c, roughness: 0.4, metalness: 0.2 }),
-    WheelWells: new THREE.MeshStandardMaterial({ color: 0x090a0d, roughness: 0.95 }),
-    ArchTrim: new THREE.MeshStandardMaterial({ color: 0x121418, roughness: 0.8, side: THREE.DoubleSide }),
-    CabinSeats: new THREE.MeshStandardMaterial({ color: 0x2b2f38, roughness: 0.85 }),
-    CabinFloor: new THREE.MeshStandardMaterial({ color: 0x15171b, roughness: 0.95 }),
-    Dashboard: new THREE.MeshStandardMaterial({ color: 0x1a1c21, roughness: 0.7, metalness: 0.1 }),
+    Badge: new THREE.MeshStandardMaterial({ color: 0xe8edf3, metalness: 0.95, roughness: 0.12 }),
+    Wheels: rubber(0x141619, 0.76),
+    Rims: new THREE.MeshStandardMaterial({ color: 0xd6dee8, metalness: 0.88, roughness: 0.2, envMapIntensity: 1.5 }),
+    RimDark: new THREE.MeshStandardMaterial({ color: 0x1b1f26, metalness: 0.4, roughness: 0.55 }),
+    Brakes: new THREE.MeshStandardMaterial({ color: 0x5a606a, metalness: 0.8, roughness: 0.38 }),
+    Calipers: new THREE.MeshStandardMaterial({ color: 0x3f4550, roughness: 0.45, metalness: 0.35 }),
+    WheelWells: new THREE.MeshStandardMaterial({ color: 0x090a0d, roughness: 0.96, side: THREE.DoubleSide }),
+    CabinSeats: new THREE.MeshStandardMaterial({ color: 0x3a414e, roughness: 0.82 }),
+    Headrests: new THREE.MeshStandardMaterial({ color: 0x7b8798, roughness: 0.78 }),
+    CabinFloor: new THREE.MeshStandardMaterial({ color: 0x121418, roughness: 0.95 }),
+    Dashboard: new THREE.MeshStandardMaterial({ color: 0x1b1e24, roughness: 0.72, metalness: 0.1 }),
   };
 }
 
@@ -147,7 +151,7 @@ export async function createCaravelleRig(): Promise<CaravelleRig> {
     mesh.receiveShadow = false;
     if (base === 'Windshield' || base.startsWith('Glass')) mesh.renderOrder = 2;
     byName[name] = mesh;
-    if (['Wheels', 'Rims', 'Brakes', 'Calipers'].includes(base) && name.includes('_')) {
+    if (['Wheels', 'Rims', 'RimDark', 'Brakes', 'Calipers'].includes(base) && name.includes('_')) {
       const key = name.split('_')[1];
       (wheelParts[key] ||= []).push(mesh);
     }
