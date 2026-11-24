@@ -186,18 +186,64 @@ function sampleContinuousRoute(
 
 function createGoogleMapsCaravellePuck(): HTMLDivElement {
   const wrapper = document.createElement('div');
-  wrapper.style.width = '46px';
-  wrapper.style.height = '46px';
+  wrapper.setAttribute('data-testid', 'mini-caravelle-marker');
+  wrapper.style.width = '56px';
+  wrapper.style.height = '96px';
   wrapper.style.display = 'flex';
   wrapper.style.alignItems = 'center';
   wrapper.style.justifyContent = 'center';
   wrapper.style.pointerEvents = 'none';
   wrapper.innerHTML = `
-    <svg viewBox="0 0 64 64" width="44" height="44" style="filter: drop-shadow(0 6px 10px rgba(0,0,0,0.42));">
-      <!-- Outer Google Maps navigation puck -->
-      <circle cx="32" cy="32" r="24" fill="#FFFFFF" stroke="#1967D2" stroke-width="3" />
-      <!-- Crisp directional chevron pointing forward (up = 0 deg) -->
-      <path d="M 32 13 L 45 44 L 32 37 L 19 44 Z" fill="#4285F4" stroke="#1967D2" stroke-width="1.5" stroke-linejoin="miter" />
+    <svg viewBox="0 0 84 144" width="52" height="90" style="filter: drop-shadow(0 8px 12px rgba(9, 11, 16, 0.45));">
+      <defs>
+        <radialGradient id="navHaloGrad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.34" />
+          <stop offset="65%" stop-color="#4285F4" stop-opacity="0.18" />
+          <stop offset="100%" stop-color="#4285F4" stop-opacity="0" />
+        </radialGradient>
+        <linearGradient id="t5RoofGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#DCE3EC" />
+          <stop offset="22%" stop-color="#FFFFFF" />
+          <stop offset="78%" stop-color="#F8FAFC" />
+          <stop offset="100%" stop-color="#CBD5E1" />
+        </linearGradient>
+        <linearGradient id="t5AzureGlass" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#38BDF8" />
+          <stop offset="35%" stop-color="#1E3A5F" />
+          <stop offset="100%" stop-color="#0F172A" />
+        </linearGradient>
+      </defs>
+
+      <!-- Soft Cyan / Blue Navigation Halo -->
+      <ellipse cx="42" cy="72" rx="40" ry="66" fill="url(#navHaloGrad)" />
+      <ellipse cx="42" cy="72" rx="28" ry="56" fill="none" stroke="#38BDF8" stroke-opacity="0.45" stroke-width="1.5" />
+
+      <!-- Sculpted Side Mirrors -->
+      <path d="M 11 40 Q 11 35 16 35 L 21 37 L 21 47 L 14 47 Q 11 46 11 40 Z" fill="#F8FAFC" stroke="#475569" stroke-width="1.2" />
+      <path d="M 73 40 Q 73 35 68 35 L 63 37 L 63 47 L 70 47 Q 73 46 73 40 Z" fill="#F8FAFC" stroke="#475569" stroke-width="1.2" />
+
+      <!-- White VW Caravelle T5 LWB Outer Unibody -->
+      <rect x="20" y="14" width="44" height="114" rx="12" fill="url(#t5RoofGrad)" stroke="#64748B" stroke-width="1.8" />
+
+      <!-- Sculpted Front Hood & Clear Headlights -->
+      <path d="M 24 22 Q 42 15 60 22 L 59 33 Q 42 29 25 33 Z" fill="#E2E8F0" />
+      <rect x="23" y="16" width="9" height="4" rx="2" fill="#FEF9C3" stroke="#94A3B8" stroke-width="0.6" />
+      <rect x="52" y="16" width="9" height="4" rx="2" fill="#FEF9C3" stroke="#94A3B8" stroke-width="0.6" />
+
+      <!-- Raked Azure-Tinted Front Windshield -->
+      <path d="M 24 33 Q 42 28 60 33 L 57 50 Q 42 47 27 50 Z" fill="url(#t5AzureGlass)" stroke="#0F172A" stroke-width="1" />
+
+      <!-- Roof Panel Center Channel & Subtle Specular Lines -->
+      <rect x="27" y="53" width="30" height="62" rx="4" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1" />
+      <line x1="34" y1="56" x2="34" y2="112" stroke="#E2E8F0" stroke-width="1" />
+      <line x1="50" y1="56" x2="50" y2="112" stroke="#E2E8F0" stroke-width="1" />
+
+      <!-- Rear Azure-Tinted Window -->
+      <rect x="26" y="117" width="32" height="7" rx="3" fill="url(#t5AzureGlass)" stroke="#0F172A" stroke-width="0.8" />
+
+      <!-- Crisp Red Rear Taillights -->
+      <rect x="22" y="125" width="9" height="3.2" rx="1.4" fill="#EF4444" />
+      <rect x="53" y="125" width="9" height="3.2" rx="1.4" fill="#EF4444" />
     </svg>
   `;
   return wrapper;

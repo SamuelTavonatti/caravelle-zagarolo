@@ -140,12 +140,16 @@ async function runFlowForViewport(browser, vp) {
   // 3. Launch Google Maps Style 3D Trailer starting from Via Gocciadoro 1, Trento
   await page.getByTestId('launch-trailer-btn').click();
   await page.getByTestId('act-three-trailer').waitFor({ state: 'visible', timeout: 8000 });
-  await page.waitForTimeout(2600);
+  await page.waitForTimeout(3200);
   const startBanner = await page.locator('header').textContent();
   if (!startBanner?.includes('Gocciadoro')) {
     throw new Error(`[${vp.name}] Expected Via Gocciadoro 1 departure, got: ${startBanner}`);
   }
-  await page.screenshot({ path: path.join(outDir, `${vp.name}-06-trailer-gocciadoro.png`) });
+  const hasMiniVan = await page.getByTestId('mini-caravelle-marker').count();
+  if (hasMiniVan === 0) {
+    throw new Error(`[${vp.name}] Mini white VW Caravelle map marker not mounted!`);
+  }
+  await page.screenshot({ path: path.join(outDir, `${vp.name}-06-trailer-mini-caravelle.png`) });
 
   // Verify pickup overlays & highway entry
   await page.getByTestId('jump-stop-tappa-1').click();
