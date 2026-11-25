@@ -1,12 +1,11 @@
-import { initializeApp, type FirebaseApp } from 'firebase/app';
 import {
   collection,
   doc,
-  getFirestore,
   onSnapshot,
   runTransaction,
   type Firestore,
 } from 'firebase/firestore';
+import { db as firebaseDb } from '../lib/firebase';
 import type { BookingInput, BookingsMap, SeatBooking, SeatId } from '../types/roadtrip';
 
 const CLIENT_TOKEN_KEY = 'caravelle_t5_client_token_v1';
@@ -37,42 +36,11 @@ export function getOrCreateClientToken(): string {
   }
 }
 
-function getFirebaseConfig() {
-  const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
-  const authDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
-  const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-  const storageBucket = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET;
-  const messagingSenderId = import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID;
-  const appId = import.meta.env.VITE_FIREBASE_APP_ID;
-
-  if (!apiKey || !projectId || !appId) {
-    return null;
-  }
-
-  return {
-    apiKey,
-    authDomain,
-    projectId,
-    storageBucket,
-    messagingSenderId,
-    appId,
-  };
-}
-
-let firebaseApp: FirebaseApp | null = null;
-let firestoreDb: Firestore | null = null;
+let cloudFallbackToLocal = false;
 
 function ensureFirestore(): Firestore | null {
-  if (firestoreDb) return firestoreDb;
-  const cfg = getFirebaseConfig();
-  if (!cfg) return null;
-  try {
-    firebaseApp = initializeApp(cfg);
-    firestoreDb = getFirestore(firebaseApp);
-    return firestoreDb;
-  } catch {
-    return null;
-  }
+  if (cloudFallbackToLocal) return null;
+  return firebaseDb ?? null;
 }
 
 function readLocalBookings(): BookingsMap {
@@ -111,48 +79,7 @@ export function getSyncMode(): SyncMode {
   return ensureFirestore() ? 'firebase' : 'local';
 }
 
-export function subscribeToBookings(
-  onUpdate: (bookings: BookingsMap, mode: SyncMode) => void,
-  onError?: (message: string) => void
-): () => void {
-  const db = ensureFirestore();
-
-  if (db) {
-    try {
-      const seatsCol = collection(db, COLLECTION_PATH);
-      const unsub = onSnapshot(
-        seatsCol,
-        (snapshot) => {
-          const map: BookingsMap = {};
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data() as Partial<SeatBooking>;
-            const seatId = docSnap.id as SeatId;
-            if (data.firstName && data.clientToken) {
-              map[seatId] = {
-                seatId,
-                firstName: data.firstName,
-                lastName: data.lastName ?? '',
-                pickupLocation: data.pickupLocation ?? '',
-                clientToken: data.clientToken,
-                updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : Date.now(),
-              };
-            }
-          });
-          onUpdate(map, 'firebase');
-        },
-        () => {
-          // Automatic offline/local fallback if Firestore rules/network fail
-          onUpdate(readLocalBookings(), 'local');
-          onError?.('Sincronizzazione cloud non raggiungibile: modalità locale attiva.');
-        }
-      );
-      return unsub;
-    } catch {
-      // Fallback immediately to local sync
-    }
-  }
-
-  // Local real-time sync (same tab + cross-tab via storage + BroadcastChannel)
+function subscribeLocal(onUpdate: (bookings: BookingsMap, mode: SyncMode) => void): () => void {
   onUpdate(readLocalBookings(), 'local');
 
   const handleStorage = (event: StorageEvent) => {
@@ -190,6 +117,58 @@ export function subscribeToBookings(
     window.removeEventListener('caravelle-local-sync', handleCustom);
     channel?.close();
   };
+}
+
+export function subscribeToBookings(
+  onUpdate: (bookings: BookingsMap, mode: SyncMode) => void,
+  onError?: (message: string) => void
+): () => void {
+  const db = ensureFirestore();
+
+  if (db) {
+    try {
+      let unsubLocal: (() => void) | null = null;
+      const seatsCol = collection(db, COLLECTION_PATH);
+      const unsubCloud = onSnapshot(
+        seatsCol,
+        (snapshot) => {
+          cloudFallbackToLocal = false;
+          const map: BookingsMap = {};
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data() as Partial<SeatBooking>;
+            const seatId = docSnap.id as SeatId;
+            if (data.firstName && data.clientToken) {
+              map[seatId] = {
+                seatId,
+                firstName: data.firstName,
+                lastName: data.lastName ?? '',
+                pickupLocation: data.pickupLocation ?? '',
+                clientToken: data.clientToken,
+                updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : Date.now(),
+              };
+            }
+          });
+          onUpdate(map, 'firebase');
+        },
+        () => {
+          // Automatic offline/local fallback if Firestore rules/network fail
+          cloudFallbackToLocal = true;
+          if (!unsubLocal) {
+            unsubLocal = subscribeLocal(onUpdate);
+          }
+          onError?.('Sincronizzazione cloud non raggiungibile: modalità locale attiva.');
+        }
+      );
+      return () => {
+        unsubCloud();
+        unsubLocal?.();
+      };
+    } catch {
+      cloudFallbackToLocal = true;
+    }
+  }
+
+  return subscribeLocal(onUpdate);
 }
 
 export function findMySeat(bookings: BookingsMap, clientToken: string): SeatBooking | null {
