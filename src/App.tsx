@@ -9,6 +9,7 @@ const ActThreeTrailer = lazy(() =>
   import('./components/ActThreeTrailer').then((m) => ({ default: m.ActThreeTrailer }))
 );
 import {
+  adoptSeatByLastName,
   bookSeatAtomic,
   findMySeat,
   getOrCreateClientToken,
@@ -18,7 +19,7 @@ import {
   switchSeatAtomic,
   type SyncMode,
 } from './services/seatSync';
-import type { AppAct, BookingInput, BookingsMap, SeatId } from './types/roadtrip';
+import type { AppAct, BookingInput, BookingsMap, SeatBooking, SeatId } from './types/roadtrip';
 
 export function App() {
   const [act, setAct] = useState<AppAct>('exterior');
@@ -26,7 +27,7 @@ export function App() {
   const [syncMode, setSyncMode] = useState<SyncMode>(() => getSyncMode());
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const clientToken = useMemo(() => getOrCreateClientToken(), []);
+  const [clientToken, setClientToken] = useState<string>(() => getOrCreateClientToken());
   const myBooking = useMemo(() => findMySeat(bookings, clientToken), [bookings, clientToken]);
 
   const lenisRef = useRef<Lenis | null>(null);
@@ -106,6 +107,14 @@ export function App() {
     await releaseMySeatAtomic(clientToken, bookings);
   }, [bookings, clientToken]);
 
+  const handleAdoptSeat = useCallback(
+    (booking: SeatBooking, verificationInput: string) => {
+      const adoptedToken = adoptSeatByLastName(booking, verificationInput);
+      setClientToken(adoptedToken);
+    },
+    []
+  );
+
   return (
     <MotionConfig reducedMotion="user">
       <div className="min-h-[100dvh] w-full bg-[#090B0E] text-[#F5F6F8]">
@@ -130,6 +139,7 @@ export function App() {
               onBookSeat={handleBookSeat}
               onSwitchSeat={handleSwitchSeat}
               onReleaseSeat={handleReleaseSeat}
+              onAdoptSeat={handleAdoptSeat}
               onBookingCelebrationDone={() => setAct('curtain')}
               onBackToExterior={() => setAct('exterior')}
               onOpenTrailer={() => setAct('curtain')}

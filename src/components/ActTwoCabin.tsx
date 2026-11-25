@@ -24,6 +24,7 @@ interface ActTwoCabinProps {
   onBookSeat: (seatId: SeatId, input: BookingInput) => Promise<void>;
   onSwitchSeat: (targetSeatId: SeatId) => Promise<void>;
   onReleaseSeat: () => Promise<void>;
+  onAdoptSeat: (booking: SeatBooking, verificationInput: string) => void;
   onBookingCelebrationDone: () => void;
   onBackToExterior: () => void;
   onOpenTrailer: () => void;
@@ -38,6 +39,7 @@ export function ActTwoCabin({
   onBookSeat,
   onSwitchSeat,
   onReleaseSeat,
+  onAdoptSeat,
   onBookingCelebrationDone,
   onBackToExterior,
   onOpenTrailer,
@@ -54,6 +56,15 @@ export function ActTwoCabin({
   const [actionError, setActionError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [confirmedSeatId, setConfirmedSeatId] = useState<SeatId | null>(null);
+  const [unlockOpen, setUnlockOpen] = useState(false);
+  const [unlockInput, setUnlockInput] = useState('');
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setUnlockOpen(false);
+    setUnlockInput('');
+    setUnlockError(null);
+  }, [selectedSeatId]);
 
   useEffect(() => {
     onModalToggle?.(isModalOpen || confirmedSeatId !== null);
@@ -298,7 +309,7 @@ export function ActTwoCabin({
                 <p className="text-sm font-bold text-[#F8FAFC]">
                   Il tuo posto è il{' '}
                   <span className="font-mono-telemetry text-[#34D399]">{myBooking.seatId}</span> ·{' '}
-                  {myBooking.firstName} {myBooking.lastName}
+                  {myBooking.firstName}
                 </p>
                 <p className="mt-0.5 flex items-center gap-1.5 text-xs text-[#A1A1AA]">
                   <MapPin className="h-3.5 w-3.5 shrink-0 text-[#10B981]" aria-hidden="true" />
@@ -551,13 +562,91 @@ export function ActTwoCabin({
 
               {isSelectedByOther && selectedOccupant && (
                 <div className="rounded-[4px] border border-white/12 bg-[#09090B] px-4 py-3.5 text-sm">
-                  <p className="font-bold text-[#F8FAFC]">
-                    Occupato da {selectedOccupant.firstName}
-                  </p>
-                  <p className="mt-1 flex items-center gap-1.5 text-xs text-[#A1A1AA]">
-                    <MapPin className="h-3.5 w-3.5 shrink-0 text-[#4285F4]" aria-hidden="true" />
-                    <span>Raccolta: {selectedOccupant.pickupLocation}</span>
-                  </p>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-bold text-[#F8FAFC]">
+                        Occupato da {selectedOccupant.firstName}
+                      </p>
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-[#A1A1AA]">
+                        <MapPin className="h-3.5 w-3.5 shrink-0 text-[#4285F4]" aria-hidden="true" />
+                        <span>Raccolta: {selectedOccupant.pickupLocation}</span>
+                      </p>
+                    </div>
+
+                    {!unlockOpen && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUnlockOpen(true);
+                          setUnlockError(null);
+                        }}
+                        data-testid="unlock-seat-trigger"
+                        className="tactile-btn rounded-[4px] border border-white/15 bg-[#141418] px-2.5 py-1.5 text-[11px] font-semibold text-[#CBD5E1] hover:border-[#38BDF8]/50 hover:text-[#F8FAFC]"
+                      >
+                        È il tuo posto? Modifica / Libera
+                      </button>
+                    )}
+                  </div>
+
+                  {unlockOpen && (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        try {
+                          onAdoptSeat(selectedOccupant, unlockInput);
+                          setUnlockOpen(false);
+                          setUnlockInput('');
+                          setUnlockError(null);
+                          setToastMessage(
+                            `Posto ${selectedOccupant.seatId} sbloccato per ${selectedOccupant.firstName}.`
+                          );
+                        } catch (err) {
+                          setUnlockError(
+                            err instanceof Error ? err.message : 'Verifica non riuscita.'
+                          );
+                        }
+                      }}
+                      className="mt-3 border-t border-white/10 pt-3"
+                    >
+                      <label
+                        htmlFor="unlock-lastname-input"
+                        className="block font-mono-telemetry text-[11px] font-medium uppercase tracking-[0.04em] text-[#A1A1AA]"
+                      >
+                        Conferma il tuo cognome
+                      </label>
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <input
+                          id="unlock-lastname-input"
+                          type="text"
+                          value={unlockInput}
+                          onChange={(e) => {
+                            setUnlockInput(e.target.value);
+                            if (unlockError) setUnlockError(null);
+                          }}
+                          placeholder="Cognome"
+                          autoComplete="family-name"
+                          data-testid="unlock-lastname-input"
+                          className="min-h-[42px] w-full rounded-[4px] border border-white/15 bg-[#141418] px-3 text-base text-[#F8FAFC] placeholder:text-[#52525B] focus:border-[#38BDF8] focus:outline-none"
+                        />
+                        <button
+                          type="submit"
+                          data-testid="unlock-seat-submit"
+                          className="tactile-btn min-h-[42px] shrink-0 rounded-[4px] bg-[#10B981] px-4 text-xs font-bold text-[#042419] hover:bg-[#34D399]"
+                        >
+                          Sblocca
+                        </button>
+                      </div>
+                      {unlockError && (
+                        <p
+                          role="alert"
+                          data-testid="unlock-seat-error"
+                          className="mt-2 text-xs text-[#FCA5A5]"
+                        >
+                          {unlockError}
+                        </p>
+                      )}
+                    </form>
+                  )}
                 </div>
               )}
             </div>
