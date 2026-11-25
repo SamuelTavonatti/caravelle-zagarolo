@@ -82,6 +82,8 @@ async function runFlowForViewport(browser, vp) {
   await page.waitForTimeout(500);
   const cursor = await page.evaluate(() => document.querySelector('[data-testid="caravelle-3d-canvas"] canvas').style.cursor);
   if (cursor !== 'pointer') throw new Error(`[${vp.name}] 3D door hover cursor is "${cursor}", expected pointer`);
+  const hoverOp = await page.evaluate(() => window.__CARAVELLE_STAGE__?.hoverOpacity?.() ?? 0);
+  if (hoverOp < 0.08) throw new Error(`[${vp.name}] 3D sliding door cyan hover highlight did not activate (opacity=${hoverOp})`);
   await page.screenshot({ path: path.join(outDir, `${vp.name}-01b-door-hover.png`) });
   await page.mouse.click(door.x, door.y);
   await page.getByTestId('act-two-cabin').waitFor({ state: 'visible', timeout: 15000 });

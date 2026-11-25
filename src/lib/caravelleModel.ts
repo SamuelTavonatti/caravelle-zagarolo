@@ -42,7 +42,7 @@ function loadGLB(): Promise<THREE.Group> {
  * orients nose -> +X and right sliding door -> +Z, and tunes PBR materials
  * while preserving the embedded sRGB baseColor texture.
  */
-export async function createCaravelleRig(): Promise<CaravelleRig> {
+export async function createCaravelleRig(maxAnisotropy = 16): Promise<CaravelleRig> {
   const src = await loadGLB();
   const root = new THREE.Group();
   const pivot = new THREE.Group();
@@ -50,6 +50,7 @@ export async function createCaravelleRig(): Promise<CaravelleRig> {
 
   const hitMeshes: THREE.Object3D[] = [];
   const materials: THREE.MeshStandardMaterial[] = [];
+  const aniso = Math.min(16, Math.max(1, maxAnisotropy));
 
   model.traverse((o) => {
     const mesh = o as THREE.Mesh;
@@ -62,12 +63,15 @@ export async function createCaravelleRig(): Promise<CaravelleRig> {
 
     if (std.map) {
       std.map.colorSpace = THREE.SRGBColorSpace;
-      std.map.anisotropy = 8;
+      std.map.anisotropy = aniso;
+      std.map.minFilter = THREE.LinearMipmapLinearFilter;
+      std.map.magFilter = THREE.LinearFilter;
+      std.map.generateMipmaps = true;
       std.map.needsUpdate = true;
     }
-    std.roughness = 0.28;
-    std.metalness = 0.08;
-    std.envMapIntensity = 1.25;
+    std.roughness = 0.58;
+    std.metalness = 0.04;
+    std.envMapIntensity = 0.65;
     std.needsUpdate = true;
 
     mesh.material = std;

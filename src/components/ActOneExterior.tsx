@@ -60,6 +60,24 @@ export function ActOneExterior({
         />
       </motion.div>
 
+      {/* Subtle Floating Hover Cue Pill on Sliding Door Hover */}
+      <motion.div
+        aria-hidden={!doorHovered}
+        data-testid="door-hover-cue"
+        initial={false}
+        animate={{
+          opacity: doorHovered && doorPhase === 'closed' ? 1 : 0,
+          y: doorHovered && doorPhase === 'closed' ? 0 : 6,
+        }}
+        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+        className="pointer-events-none absolute inset-x-0 top-16 z-20 flex justify-center sm:top-20"
+      >
+        <div className="inline-flex items-center gap-2 border border-[#38BDF8]/45 bg-[#09090B]/85 px-3.5 py-1.5 font-mono-telemetry text-[11px] font-medium tracking-[0.04em] text-[#BAE6FD] backdrop-blur-md">
+          <span className="h-1.5 w-1.5 bg-[#38BDF8]" aria-hidden="true" />
+          <span>Clicca per aprire il portellone</span>
+        </div>
+      </motion.div>
+
       {/* Subtle Bottom Scrim for Sharp Editorial Legibility */}
       <div
         aria-hidden="true"
