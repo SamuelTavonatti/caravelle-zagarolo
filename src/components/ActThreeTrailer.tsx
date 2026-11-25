@@ -275,6 +275,7 @@ function createCaravelle3DPuck(): Caravelle3DPuck {
   const draw = () => {
     if (!alive || !renderer) return;
     if (rig) {
+      rig.root.rotation.y = Math.PI / 2 - steer * 0.22;
       for (const w of rig.wheels) {
         w.spin.rotation.z = -dist / 0.34;
         if (w.front) w.steer.rotation.y = steer;

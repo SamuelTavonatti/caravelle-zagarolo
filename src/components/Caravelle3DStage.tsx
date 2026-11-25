@@ -91,9 +91,9 @@ function alpineTexture(): THREE.CanvasTexture {
   return t;
 }
 
-const idleDistance = (aspect: number) => Math.max(10.5, 6.6 / (0.4986 * Math.max(0.3, aspect)));
+const idleDistance = (aspect: number) => Math.max(10.4, 6.5 / (0.4986 * Math.max(0.3, aspect)));
 
-/** Hero stage: sculpted GLB Caravelle T5 in an obsidian studio with cyan-azure floor focus light. */
+/** Hero stage: uploaded GLB Caravelle T5 in an obsidian studio with cyan-azure floor focus light. */
 export function Caravelle3DStage({
   doorPhase,
   onDoorClick,
@@ -121,8 +121,7 @@ export function Caravelle3DStage({
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.15;
-    renderer.shadowMap.enabled = false; // soft contact-shadow blob instead (much cheaper)
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.enabled = false;
     container.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
@@ -135,7 +134,7 @@ export function Caravelle3DStage({
 
     const camera = new THREE.PerspectiveCamera(28, container.clientWidth / Math.max(1, container.clientHeight), 0.1, 90);
 
-    // Backdrop
+    // Twilight Alpine backdrop
     const alpine = new THREE.Mesh(
       new THREE.PlaneGeometry(40, 17),
       new THREE.MeshBasicMaterial({ map: alpineTexture(), depthWrite: false, fog: false })
@@ -143,10 +142,10 @@ export function Caravelle3DStage({
     alpine.position.set(0, 5, -11);
     scene.add(alpine);
 
-    // Dark satin floor
+    // Dark satin studio floor
     const floor = new THREE.Mesh(
       new THREE.CircleGeometry(30, 64),
-      new THREE.MeshStandardMaterial({ color: 0x050608, roughness: 0.92, metalness: 0, envMapIntensity: 0.05 })
+      new THREE.MeshStandardMaterial({ color: 0x06070a, roughness: 0.85, metalness: 0.08, envMapIntensity: 0.12 })
     );
     (floor.material as THREE.MeshStandardMaterial).envMap = envTex;
     floor.rotation.x = -Math.PI / 2;
@@ -154,31 +153,54 @@ export function Caravelle3DStage({
 
     // Cyan-azure focus spotlight pool under chassis
     const poolTex = radialTexture([
-      [0, 'rgba(56,189,248,0.95)'],
-      [0.35, 'rgba(14,165,233,0.45)'],
+      [0, 'rgba(56,189,248,0.92)'],
+      [0.38, 'rgba(14,165,233,0.42)'],
       [1, 'rgba(14,165,233,0)'],
     ]);
     const pool = new THREE.Mesh(
-      new THREE.PlaneGeometry(9.5, 4.2),
-      new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })
+      new THREE.PlaneGeometry(9.2, 4.4),
+      new THREE.MeshBasicMaterial({
+        map: poolTex,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        fog: false,
+      })
     );
     pool.rotation.x = -Math.PI / 2;
     pool.position.y = 0.012;
     scene.add(pool);
 
-    // Soft contact shadow blob
+    // Soft contact shadow blob beneath tires
     const blobTex = radialTexture([
-      [0, 'rgba(0,0,0,0.85)'],
-      [0.6, 'rgba(0,0,0,0.4)'],
+      [0, 'rgba(0,0,0,0.88)'],
+      [0.62, 'rgba(0,0,0,0.45)'],
       [1, 'rgba(0,0,0,0)'],
     ]);
     const blob = new THREE.Mesh(
-      new THREE.PlaneGeometry(6.4, 2.6),
+      new THREE.PlaneGeometry(6.2, 2.8),
       new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false, fog: false })
     );
     blob.rotation.x = -Math.PI / 2;
     blob.position.y = 0.016;
     scene.add(blob);
+
+    // Subtle cyan highlight cue over the right sliding door zone (illuminates on hover)
+    const doorCueMat = new THREE.MeshBasicMaterial({
+      map: radialTexture([
+        [0, 'rgba(125,211,252,0.75)'],
+        [0.45, 'rgba(56,189,248,0.28)'],
+        [1, 'rgba(14,165,233,0)'],
+      ]),
+      transparent: true,
+      opacity: 0.0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false,
+    });
+    const doorCue = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.35), doorCueMat);
+    doorCue.position.set(-0.08, 1.05, 1.3);
+    scene.add(doorCue);
 
     // Soft atmospheric headlight beam haze extending gently to the right (+X)
     const beamCanvas = document.createElement('canvas');
@@ -189,8 +211,8 @@ export function Caravelle3DStage({
     bctx.translate(180, 128);
     bctx.scale(1.6, 0.75);
     const bg = bctx.createRadialGradient(0, 0, 10, 0, 0, 185);
-    bg.addColorStop(0, 'rgba(186,230,253,0.38)');
-    bg.addColorStop(0.45, 'rgba(56,189,248,0.16)');
+    bg.addColorStop(0, 'rgba(186,230,253,0.34)');
+    bg.addColorStop(0.45, 'rgba(56,189,248,0.14)');
     bg.addColorStop(1, 'rgba(14,165,233,0)');
     bctx.fillStyle = bg;
     bctx.beginPath();
@@ -209,23 +231,23 @@ export function Caravelle3DStage({
         fog: false,
       })
     );
-    beam.position.set(4.15, 0.96, -0.45);
+    beam.position.set(4.1, 0.92, -0.45);
     scene.add(beam);
 
-    // Lighting
-    scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x0b0d12, 0.25));
-    const key = new THREE.DirectionalLight(0xffffff, 2.25);
+    // Studio Lighting
+    scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x0b0d12, 0.45));
+    const key = new THREE.DirectionalLight(0xffffff, 2.1);
     key.position.set(-3, 9, 6);
     scene.add(key);
+    const fill = new THREE.DirectionalLight(0xe0f2fe, 0.75);
+    fill.position.set(4, 4, 7);
+    scene.add(fill);
     const rim = new THREE.DirectionalLight(0x7dd3fc, 1.35);
     rim.position.set(6, 3, -5);
     scene.add(rim);
-    const underGlow = new THREE.PointLight(0x38bdf8, 1.5, 5, 1.8);
-    underGlow.position.set(0, 0.18, 0);
+    const underGlow = new THREE.PointLight(0x38bdf8, 1.6, 5.5, 1.8);
+    underGlow.position.set(0, 0.2, 0);
     scene.add(underGlow);
-    const cabinLight = new THREE.PointLight(0xfff4e0, 0.85, 4.5, 1.6);
-    cabinLight.position.set(-0.2, 1.68, 0.15);
-    scene.add(cabinLight);
 
     let disposed = false;
     let rig: Awaited<ReturnType<typeof createCaravelleRig>> | null = null;
@@ -241,16 +263,17 @@ export function Caravelle3DStage({
       .then((r) => {
         if (disposed) return;
         rig = r;
-        for (const m of Object.values(r.materials)) {
-          const sm = m as THREE.MeshStandardMaterial;
-          if (sm.envMapIntensity !== 1) sm.envMap = envTex;
+        for (const m of r.materials) {
+          m.envMap = envTex;
+          m.needsUpdate = true;
         }
+        doorCue.position.set(-0.08, r.bounds.height * 0.54, r.bounds.width * 0.5 + 0.04);
         scene.add(r.root);
         container.setAttribute('data-glb', 'loaded');
       })
       .catch(() => container.setAttribute('data-glb', 'error'));
 
-    const doorCenter = new THREE.Vector3(-0.1, 1.05, 0.94);
+    const doorCenter = new THREE.Vector3(-0.08, 1.0, 1.2);
     window.__CARAVELLE_STAGE__ = {
       doorScreen: () => {
         const v = doorCenter.clone().project(camera);
@@ -260,12 +283,12 @@ export function Caravelle3DStage({
       doorProgress: () => doorProgress,
     };
 
-    const hitDoor = (ev: PointerEvent) => {
+    const hitVan = (ev: PointerEvent) => {
       if (!rig) return false;
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.set(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
       raycaster.setFromCamera(pointer, camera);
-      return raycaster.intersectObjects(rig.doorHit, false).length > 0;
+      return raycaster.intersectObjects(rig.hitMeshes, false).length > 0;
     };
 
     const onMove = (ev: PointerEvent) => {
@@ -273,7 +296,7 @@ export function Caravelle3DStage({
       parallax.tx = ((ev.clientX - rect.left) / rect.width - 0.5) * 2;
       parallax.ty = ((ev.clientY - rect.top) / rect.height - 0.5) * 2;
       if (phaseRef.current !== 'closed') return;
-      const hit = hitDoor(ev);
+      const hit = hitVan(ev);
       if (hit !== hovered) {
         hovered = hit;
         renderer.domElement.style.cursor = hit ? 'pointer' : 'default';
@@ -282,7 +305,7 @@ export function Caravelle3DStage({
     };
     const onClick = (ev: PointerEvent) => {
       if (phaseRef.current !== 'closed') return;
-      if (hitDoor(ev)) clickRef.current();
+      if (hitVan(ev)) clickRef.current();
     };
     const onLeave = () => {
       if (hovered) {
@@ -313,34 +336,35 @@ export function Caravelle3DStage({
       last = now;
       const phase = phaseRef.current;
 
+      // Cinematic zoom-in toward sliding door (`sliding`), then smooth 90° top-down orbit (`overhead`)
       const target = phase === 'closed' ? 0 : 1;
-      doorProgress += (target - doorProgress) * Math.min(1, dt * 5.5);
-      if (rig) {
-        const pop = Math.min(1, doorProgress * 3.2);
-        const slide = Math.max(0, (doorProgress - 0.08) / 0.92);
-        for (const p of rig.doorParts) p.position.set(-1.12 * slide, 0, 0.1 * pop);
-        const hl = hovered && phase === 'closed' ? 1 : 0;
-        const hm = rig.materials['DoorHandle'] as THREE.MeshStandardMaterial;
-        const rm = rig.materials['TrackRail'] as THREE.MeshStandardMaterial;
-        hm.emissiveIntensity += (hl * 2.4 - hm.emissiveIntensity) * Math.min(1, dt * 12);
-        rm.emissiveIntensity += (hl * 1.2 - rm.emissiveIntensity) * Math.min(1, dt * 12);
-      }
-      cabinLight.intensity = 0.6 + doorProgress * 3.2;
+      doorProgress += (target - doorProgress) * Math.min(1, dt * 5.2);
       window.__CARAVELLE_DOOR_MAX__ = Math.max(window.__CARAVELLE_DOOR_MAX__ ?? 0, doorProgress);
 
-      overheadProgress += ((phase === 'overhead' ? 1 : 0) - overheadProgress) * Math.min(1, dt * 4.2);
+      const cueTarget = phase === 'closed' ? (hovered ? 0.65 : 0.0) : phase === 'sliding' ? 0.85 : 0.0;
+      doorCueMat.opacity += (cueTarget - doorCueMat.opacity) * Math.min(1, dt * 8);
+
+      overheadProgress += ((phase === 'overhead' ? 1 : 0) - overheadProgress) * Math.min(1, dt * 4.4);
+      const eZoom = 1 - Math.pow(1 - doorProgress, 3);
       const eo = 1 - Math.pow(1 - overheadProgress, 3);
 
       parallax.x += (parallax.tx - parallax.x) * Math.min(1, dt * 3);
       parallax.y += (parallax.ty - parallax.y) * Math.min(1, dt * 3);
 
-      const dist = idleDistance(camera.aspect);
+      const baseDist = idleDistance(camera.aspect);
+      const zoomDist = THREE.MathUtils.lerp(baseDist, Math.max(6.8, baseDist * 0.68), eZoom);
       const idleY = 1.35 + parallax.y * -0.08;
-      const camX = THREE.MathUtils.lerp(parallax.x * 0.3, 0.0, eo);
-      const camY = THREE.MathUtils.lerp(idleY, 9.5, eo);
-      const camZ = THREE.MathUtils.lerp(dist, 0.1, eo);
+
+      const camX = THREE.MathUtils.lerp(parallax.x * 0.28 * (1 - eZoom), 0.0, eo);
+      const camY = THREE.MathUtils.lerp(THREE.MathUtils.lerp(idleY, 1.55, eZoom), 9.4, eo);
+      const camZ = THREE.MathUtils.lerp(zoomDist, 0.12, eo);
+
       camera.position.set(camX, camY, camZ);
-      lookAt.set(0, THREE.MathUtils.lerp(0.95, 0.4, eo), 0);
+      lookAt.set(
+        THREE.MathUtils.lerp(0, -0.08, eZoom * (1 - eo)),
+        THREE.MathUtils.lerp(0.95, 0.45, eo),
+        0
+      );
       camera.lookAt(lookAt);
       renderer.render(scene, camera);
     };
