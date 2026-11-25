@@ -218,6 +218,25 @@ export function findMySeat(bookings: BookingsMap, clientToken: string): SeatBook
   return null;
 }
 
+const ALL_SEAT_IDS: SeatId[] = ['F1', 'F2', 'M1', 'M2', 'M3', 'R1', 'R2', 'R3'];
+
+function normName(value: string | undefined): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
+function isSamePassenger(
+  seat: SeatBooking | undefined,
+  clientToken: string,
+  firstName: string,
+  lastName: string
+): boolean {
+  if (!seat) return false;
+  if (seat.clientToken === clientToken) return true;
+  const nf = normName(firstName);
+  const nl = normName(lastName);
+  return nf.length > 0 && nl.length > 0 && normName(seat.firstName) === nf && normName(seat.lastName) === nl;
+}
+
 export async function bookSeatAtomic(
   seatId: SeatId,
   input: BookingInput,
@@ -247,22 +266,27 @@ export async function bookSeatAtomic(
       const tripRef = doc(db, TRIP_COLLECTION, TRIP_DOC_ID);
       await runTransaction(db, async (tx) => {
         const snap = await tx.get(tripRef);
-        const seats = snap.exists() ? parseSeatsMap(snap.data()?.seats) : {};
+        const currentSeats = snap.exists() ? parseSeatsMap(snap.data()?.seats) : {};
 
-        const occupant = seats[seatId];
-        if (occupant && occupant.clientToken !== clientToken) {
+        const occupant = currentSeats[seatId];
+        if (occupant && !isSamePassenger(occupant, clientToken, trimmedFirst, trimmedLast)) {
           throw new Error(`Questo posto è appena stato prenotato da ${occupant.firstName}.`);
         }
 
-        // Enforce strict 1-seat-per-user invariant
-        for (const [key, val] of Object.entries(seats)) {
-          if (val && val.clientToken === clientToken) {
-            delete seats[key as SeatId];
+        const nextSeats: Record<string, SeatBooking | null> = {};
+        for (const id of ALL_SEAT_IDS) {
+          if (id === seatId) {
+            nextSeats[id] = newBooking;
+          } else if (isSamePassenger(currentSeats[id], clientToken, trimmedFirst, trimmedLast)) {
+            nextSeats[id] = null;
+          } else if (currentSeats[id]) {
+            nextSeats[id] = currentSeats[id]!;
+          } else {
+            nextSeats[id] = null;
           }
         }
 
-        seats[seatId] = newBooking;
-        tx.set(tripRef, { seats, updatedAt: Date.now() }, { merge: true });
+        tx.set(tripRef, { seats: nextSeats, updatedAt: Date.now() }, { merge: true });
       });
       return newBooking;
     } catch (err) {
@@ -275,14 +299,13 @@ export async function bookSeatAtomic(
 
   const latest = readLocalBookings();
   const occupant = latest[seatId];
-  if (occupant && occupant.clientToken !== clientToken) {
+  if (occupant && !isSamePassenger(occupant, clientToken, trimmedFirst, trimmedLast)) {
     throw new Error(`Posto già occupato da ${occupant.firstName}. Scegline un altro libero.`);
   }
 
-  // Enforce strict 1-seat-per-user invariant
-  for (const [key, val] of Object.entries(latest)) {
-    if (val && val.clientToken === clientToken) {
-      delete latest[key as SeatId];
+  for (const id of ALL_SEAT_IDS) {
+    if (id !== seatId && isSamePassenger(latest[id], clientToken, trimmedFirst, trimmedLast)) {
+      delete latest[id];
     }
   }
 
@@ -321,7 +344,8 @@ export async function releaseMySeatAtomic(
   currentBookings: BookingsMap
 ): Promise<void> {
   const currentMine = findMySeat(currentBookings, clientToken);
-  if (!currentMine) return;
+  const firstName = currentMine?.firstName ?? '';
+  const lastName = currentMine?.lastName ?? '';
 
   const db = ensureFirestore();
   if (db) {
@@ -330,16 +354,21 @@ export async function releaseMySeatAtomic(
       await runTransaction(db, async (tx) => {
         const snap = await tx.get(tripRef);
         if (!snap.exists()) return;
-        const seats = parseSeatsMap(snap.data()?.seats);
+        const currentSeats = parseSeatsMap(snap.data()?.seats);
+        const nextSeats: Record<string, SeatBooking | null> = {};
         let changed = false;
-        for (const [key, val] of Object.entries(seats)) {
-          if (val && val.clientToken === clientToken) {
-            delete seats[key as SeatId];
+        for (const id of ALL_SEAT_IDS) {
+          if (isSamePassenger(currentSeats[id], clientToken, firstName, lastName)) {
+            nextSeats[id] = null;
             changed = true;
+          } else if (currentSeats[id]) {
+            nextSeats[id] = currentSeats[id]!;
+          } else {
+            nextSeats[id] = null;
           }
         }
         if (changed) {
-          tx.set(tripRef, { seats, updatedAt: Date.now() }, { merge: true });
+          tx.set(tripRef, { seats: nextSeats, updatedAt: Date.now() }, { merge: true });
         }
       });
       return;
@@ -349,9 +378,9 @@ export async function releaseMySeatAtomic(
   }
 
   const latest = readLocalBookings();
-  for (const [key, val] of Object.entries(latest)) {
-    if (val && val.clientToken === clientToken) {
-      delete latest[key as SeatId];
+  for (const id of ALL_SEAT_IDS) {
+    if (isSamePassenger(latest[id], clientToken, firstName, lastName)) {
+      delete latest[id];
     }
   }
   writeLocalBookings(latest);

@@ -536,7 +536,7 @@ export function ActTwoCabin({
                     className="tactile-btn inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-[4px] bg-[#10B981] px-6 py-3 text-base font-bold text-[#042419] hover:bg-[#34D399] disabled:opacity-65"
                   >
                     <ArrowRightLeft className="h-4 w-4" aria-hidden="true" />
-                    <span>{isBusy ? 'Spostamento…' : 'Sposta qui il mio posto'}</span>
+                    <span>{isBusy ? 'Spostamento…' : 'Spostati su questo posto'}</span>
                   </button>
                   <p className="text-center text-xs text-[#A1A1AA]">
                     Libera automaticamente{' '}
