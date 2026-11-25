@@ -1,5 +1,4 @@
 import {
-  collection,
   doc,
   onSnapshot,
   runTransaction,
@@ -11,7 +10,8 @@ import type { BookingInput, BookingsMap, SeatBooking, SeatId } from '../types/ro
 const CLIENT_TOKEN_KEY = 'caravelle_t5_client_token_v1';
 const LOCAL_BOOKINGS_KEY = 'caravelle_t5_bookings_v2';
 const BROADCAST_CHANNEL_NAME = 'caravelle_t5_sync_v2';
-const COLLECTION_PATH = 'trips/trento-zagarolo/seats';
+const TRIP_COLLECTION = 'trips';
+const TRIP_DOC_ID = 'zagarolo-2027';
 
 const SEEDED_LOCAL_BOOKINGS: BookingsMap = {};
 
@@ -41,6 +41,25 @@ let cloudFallbackToLocal = false;
 function ensureFirestore(): Firestore | null {
   if (cloudFallbackToLocal) return null;
   return firebaseDb ?? null;
+}
+
+function parseSeatsMap(raw: unknown): BookingsMap {
+  const map: BookingsMap = {};
+  if (!raw || typeof raw !== 'object') return map;
+  for (const [key, val] of Object.entries(raw as Record<string, Partial<SeatBooking>>)) {
+    if (val && typeof val === 'object' && val.firstName && val.clientToken) {
+      const seatId = key as SeatId;
+      map[seatId] = {
+        seatId,
+        firstName: val.firstName,
+        lastName: val.lastName ?? '',
+        pickupLocation: val.pickupLocation ?? '',
+        clientToken: val.clientToken,
+        updatedAt: typeof val.updatedAt === 'number' ? val.updatedAt : Date.now(),
+      };
+    }
+  }
+  return map;
 }
 
 function readLocalBookings(): BookingsMap {
@@ -128,26 +147,12 @@ export function subscribeToBookings(
   if (db) {
     try {
       let unsubLocal: (() => void) | null = null;
-      const seatsCol = collection(db, COLLECTION_PATH);
+      const tripRef = doc(db, TRIP_COLLECTION, TRIP_DOC_ID);
       const unsubCloud = onSnapshot(
-        seatsCol,
-        (snapshot) => {
+        tripRef,
+        (docSnap) => {
           cloudFallbackToLocal = false;
-          const map: BookingsMap = {};
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data() as Partial<SeatBooking>;
-            const seatId = docSnap.id as SeatId;
-            if (data.firstName && data.clientToken) {
-              map[seatId] = {
-                seatId,
-                firstName: data.firstName,
-                lastName: data.lastName ?? '',
-                pickupLocation: data.pickupLocation ?? '',
-                clientToken: data.clientToken,
-                updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : Date.now(),
-              };
-            }
-          });
+          const map = docSnap.exists() ? parseSeatsMap(docSnap.data()?.seats) : {};
           onUpdate(map, 'firebase');
         },
         () => {
@@ -184,7 +189,7 @@ export async function bookSeatAtomic(
   seatId: SeatId,
   input: BookingInput,
   clientToken: string,
-  currentBookings: BookingsMap
+  _currentBookings: BookingsMap
 ): Promise<SeatBooking> {
   const trimmedFirst = input.firstName.trim();
   const trimmedLast = input.lastName.trim();
@@ -206,23 +211,25 @@ export async function bookSeatAtomic(
   const db = ensureFirestore();
   if (db) {
     try {
-      const existingOwned = findMySeat(currentBookings, clientToken);
+      const tripRef = doc(db, TRIP_COLLECTION, TRIP_DOC_ID);
       await runTransaction(db, async (tx) => {
-        const targetRef = doc(db, COLLECTION_PATH, seatId);
-        const targetSnap = await tx.get(targetRef);
-        if (targetSnap.exists()) {
-          const data = targetSnap.data() as Partial<SeatBooking>;
-          if (data.clientToken && data.clientToken !== clientToken) {
-            throw new Error('Questo posto è appena stato prenotato da un altro passeggero.');
+        const snap = await tx.get(tripRef);
+        const seats = snap.exists() ? parseSeatsMap(snap.data()?.seats) : {};
+
+        const occupant = seats[seatId];
+        if (occupant && occupant.clientToken !== clientToken) {
+          throw new Error(`Questo posto è appena stato prenotato da ${occupant.firstName}.`);
+        }
+
+        // Enforce strict 1-seat-per-user invariant
+        for (const [key, val] of Object.entries(seats)) {
+          if (val && val.clientToken === clientToken) {
+            delete seats[key as SeatId];
           }
         }
 
-        if (existingOwned && existingOwned.seatId !== seatId) {
-          const prevRef = doc(db, COLLECTION_PATH, existingOwned.seatId);
-          tx.delete(prevRef);
-        }
-
-        tx.set(targetRef, newBooking);
+        seats[seatId] = newBooking;
+        tx.set(tripRef, { seats, updatedAt: Date.now() }, { merge: true });
       });
       return newBooking;
     } catch (err) {
@@ -286,11 +293,20 @@ export async function releaseMySeatAtomic(
   const db = ensureFirestore();
   if (db) {
     try {
+      const tripRef = doc(db, TRIP_COLLECTION, TRIP_DOC_ID);
       await runTransaction(db, async (tx) => {
-        const ref = doc(db, COLLECTION_PATH, currentMine.seatId);
-        const snap = await tx.get(ref);
-        if (snap.exists() && snap.data()?.clientToken === clientToken) {
-          tx.delete(ref);
+        const snap = await tx.get(tripRef);
+        if (!snap.exists()) return;
+        const seats = parseSeatsMap(snap.data()?.seats);
+        let changed = false;
+        for (const [key, val] of Object.entries(seats)) {
+          if (val && val.clientToken === clientToken) {
+            delete seats[key as SeatId];
+            changed = true;
+          }
+        }
+        if (changed) {
+          tx.set(tripRef, { seats, updatedAt: Date.now() }, { merge: true });
         }
       });
       return;

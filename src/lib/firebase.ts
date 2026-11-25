@@ -1,5 +1,5 @@
-import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getApps, initializeApp } from 'firebase/app';
+import { getFirestore, initializeFirestore, type Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyC-dg1j_YS6a0ib6tA9qRsjCJrIxhDu7hw',
@@ -10,5 +10,15 @@ const firebaseConfig = {
   appId: '1:327414520410:web:a71b9c932a984811add663',
 };
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+
+let firestore: Firestore;
+try {
+  firestore = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+  });
+} catch {
+  firestore = getFirestore(app);
+}
+
+export const db = firestore;
